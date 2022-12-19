@@ -30,7 +30,9 @@ import javax.lang.model.type.NullType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 import static org.openrewrite.java.tree.JavaType.GenericTypeVariable.Variance.*;
@@ -489,6 +491,16 @@ class ReloadableJava11TypeMapping implements JavaTypeMapping<Tree> {
                 }
             }
 
+            List<String> defaultValues = null;
+            if(methodSymbol.getDefaultValue() != null) {
+                if(methodSymbol.getDefaultValue() instanceof Attribute.Array) {
+                    defaultValues = ((Attribute.Array) methodSymbol.getDefaultValue()).getValue().stream()
+                            .map(attr -> attr.getValue().toString())
+                            .collect(Collectors.toList());
+                } else {
+                    defaultValues = Collections.singletonList(methodSymbol.getDefaultValue().getValue().toString());
+                }
+            }
             JavaType.Method method = new JavaType.Method(
                     null,
                     methodSymbol.flags_field,
@@ -497,7 +509,8 @@ class ReloadableJava11TypeMapping implements JavaTypeMapping<Tree> {
                     null,
                     paramNames,
                     null, null, null,
-                    methodSymbol.getDefaultValue() != null ? methodSymbol.defaultValue.getValue() : null
+                    // TODO: Figure out the correct thing to put here based on methodSymbol.defaultValue.getValue()
+                    defaultValues
             );
             typeCache.put(signature, method);
 

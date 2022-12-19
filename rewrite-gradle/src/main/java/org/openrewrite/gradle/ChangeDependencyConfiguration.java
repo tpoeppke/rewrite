@@ -23,6 +23,7 @@ import org.openrewrite.Recipe;
 import org.openrewrite.TreeVisitor;
 import org.openrewrite.Validated;
 import org.openrewrite.groovy.GroovyVisitor;
+import org.openrewrite.internal.StringUtils;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.java.MethodMatcher;
 import org.openrewrite.java.tree.J;
@@ -83,13 +84,12 @@ public class ChangeDependencyConfiguration extends Recipe {
     @Override
     public GroovyVisitor<ExecutionContext> getVisitor() {
         return new GroovyVisitor<ExecutionContext>() {
-            final DependencyMatcher depMatcher = DependencyMatcher.build(groupId + ":" + artifactId).getValue();
             final MethodMatcher dependencyDsl = new MethodMatcher("DependencyHandlerSpec *(..)");
 
             @Override
             public J visitMethodInvocation(J.MethodInvocation method, ExecutionContext context) {
                 J.MethodInvocation m = (J.MethodInvocation) super.visitMethodInvocation(method, context);
-                if (!dependencyDsl.matches(m) || !(configuration == null || configuration.isEmpty() || m.getSimpleName().equals(configuration))) {
+                if (!dependencyDsl.matches(m) || !(StringUtils.isBlank(configuration) || m.getSimpleName().equals(configuration))) {
                     return m;
                 }
 

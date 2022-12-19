@@ -159,22 +159,14 @@ public interface RecipeScheduler {
             ((WatchableExecutionContext) ctx).resetHasNewMessages();
         }
         try {
-            if (!recipe.getApplicableTests().isEmpty()) {
-                boolean applicable = false;
-
-                stopChecking:
-                for (S s : before) {
-                    for (Recipe r : recipeStack) {
-                        for (TreeVisitor<?, ExecutionContext> applicableTest : r.getApplicableTests()) {
-                            if (applicableTest.visit(s, ctx) != s) {
-                                applicable = true;
-                                break stopChecking;
-                            }
+            for (Recipe r : recipeStack) {
+                nextTest:
+                for (TreeVisitor<?, ExecutionContext> applicableTest : r.getApplicableTests()) {
+                    for (S s : before) {
+                        if (applicableTest.visit(s, ctx) != s) {
+                            continue nextTest;
                         }
                     }
-                }
-
-                if (!applicable) {
                     return before;
                 }
             }
