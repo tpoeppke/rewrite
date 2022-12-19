@@ -286,8 +286,12 @@ public class ChangeType extends Recipe {
                         if (anImport.isStatic() && anImport.getQualid().getTarget().getType() != null) {
                             JavaType.FullyQualified fqn = TypeUtils.asFullyQualified(anImport.getQualid().getTarget().getType());
                             if (fqn != null && TypeUtils.isOfClassType(fqn, originalType.getFullyQualifiedName()) &&
-                                    method.getSimpleName().equals(anImport.getQualid().getSimpleName())) {
+                              method.getSimpleName().equals(anImport.getQualid().getSimpleName())) {
                                 maybeAddImport(((JavaType.FullyQualified) targetType).getFullyQualifiedName(), method.getName().getSimpleName());
+                                break;
+                            } else if (fqn != null && TypeUtils.isOfClassType(fqn, originalType.getFullyQualifiedName()) &&
+                              "*".equals(anImport.getQualid().getSimpleName())) {
+                                maybeAddImport(((JavaType.FullyQualified) targetType).getFullyQualifiedName(), "*", false);
                                 break;
                             }
                         }
