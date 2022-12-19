@@ -70,9 +70,12 @@ public class DefaultJavaTypeSignatureBuilder implements JavaTypeSignatureBuilder
         JavaType.GenericTypeVariable gtv = (JavaType.GenericTypeVariable) type;
         StringBuilder s = new StringBuilder("Generic{" + gtv.getName());
 
-        if (typeVariableNameStack == null) {
-            typeVariableNameStack = new LinkedHashSet<>();
+        synchronized (typeVariableNameStack) {
+            if (typeVariableNameStack == null) {
+                typeVariableNameStack = Collections.synchronizedSet(new LinkedHashSet<>());
+            }
         }
+
         if (!gtv.getName().equals("?") && !typeVariableNameStack.add(gtv.getName())) {
             s.append('}');
             return s.toString();
@@ -109,8 +112,10 @@ public class DefaultJavaTypeSignatureBuilder implements JavaTypeSignatureBuilder
     public String parameterizedSignature(Object type) {
         JavaType.Parameterized pt = (JavaType.Parameterized) type;
 
-        if(parameterizedStack == null) {
-            parameterizedStack = Collections.newSetFromMap(new IdentityHashMap<>());
+        synchronized (parameterizedStack) {
+            if (parameterizedStack == null) {
+                parameterizedStack = Collections.newSetFromMap(Collections.synchronizedMap(new IdentityHashMap<>()));
+            }
         }
         parameterizedStack.add(pt);
 
