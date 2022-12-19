@@ -552,7 +552,7 @@ public class Autodetect extends NamedStyles {
                                         addNewLine = true;
                                         continue;
                                     } else {
-                                        if (countOfBlocksInStaticGroups.get(i) == 0) {
+                                        if (countOfBlocksInStaticGroups.get(i) == 0 || i < insertStaticAllOtherAtIndex) {
                                             continue;
                                         } else {
                                             insertStaticAllOthers = false;
