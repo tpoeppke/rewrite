@@ -119,7 +119,7 @@ public class ChangeMethodName extends Recipe {
         @Override
         public J.MethodInvocation visitMethodInvocation(J.MethodInvocation method, ExecutionContext ctx) {
             J.MethodInvocation m = super.visitMethodInvocation(method, ctx);
-            if (methodMatcher.matches(method) && !method.getSimpleName().equals(newMethodName)) {
+            if (methodMatcher.matches(method, true) && !method.getSimpleName().equals(newMethodName)) {
                 JavaType.Method type = m.getMethodType();
                 if (type != null) {
                     type = type.withName(newMethodName);
