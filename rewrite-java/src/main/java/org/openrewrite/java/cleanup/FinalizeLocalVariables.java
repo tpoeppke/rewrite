@@ -21,7 +21,6 @@ import org.openrewrite.*;
 import org.openrewrite.internal.ListUtils;
 import org.openrewrite.java.JavaIsoVisitor;
 import org.openrewrite.java.tree.J;
-import org.openrewrite.java.tree.NameTree;
 import org.openrewrite.java.tree.Space;
 import org.openrewrite.marker.Markers;
 
@@ -64,7 +63,7 @@ public class FinalizeLocalVariables extends Recipe {
                 }
 
                 // ignore fields (aka "instance variable" or "class variable")
-                if (mv.getVariables().stream().anyMatch(v -> v.isField(getCursor()) || isField(getCursor()))) {
+                if (mv.getVariables().stream().anyMatch(v -> v.isField(getCursor()))) {
                     return mv;
                 }
 
@@ -81,15 +80,9 @@ public class FinalizeLocalVariables extends Recipe {
         };
     }
 
-
     private boolean isDeclaredInForLoopControl(Cursor cursor) {
         return cursor.getParentTreeCursor()
                 .getValue() instanceof J.ForLoop.Control;
-    }
-
-    private boolean isField(Cursor cursor) {
-        return cursor.dropParentUntil(parent -> parent instanceof J.ClassDeclaration || parent instanceof J.MethodDeclaration)
-                .getValue() instanceof J.ClassDeclaration;
     }
 
     @Value
@@ -101,7 +94,7 @@ public class FinalizeLocalVariables extends Recipe {
         /**
          * @param j        The subtree to search.
          * @param variable A {@link J.VariableDeclarations.NamedVariable} to check for any reassignment calls.
-         * @return A set of {@link NameTree} locations of reassignment calls to this variable.
+         * @return An {@link AtomicBoolean} that is true if the variable has been reassigned and false otherwise.
          */
         static AtomicBoolean find(J j, J.VariableDeclarations.NamedVariable variable) {
             return new FindAssignmentReferencesToVariable(variable)

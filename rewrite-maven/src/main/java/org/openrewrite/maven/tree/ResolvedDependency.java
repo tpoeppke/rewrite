@@ -18,11 +18,11 @@ package org.openrewrite.maven.tree;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
-import lombok.Value;
-import lombok.With;
+import lombok.*;
 import lombok.experimental.NonFinal;
 import org.openrewrite.internal.lang.Nullable;
 
+import java.io.Serializable;
 import java.util.List;
 
 import static org.openrewrite.internal.StringUtils.matchesGlob;
@@ -30,7 +30,10 @@ import static org.openrewrite.internal.StringUtils.matchesGlob;
 @JsonIdentityInfo(generator = ObjectIdGenerators.IntSequenceGenerator.class, property = "@ref")
 @Value
 @With
-public class ResolvedDependency {
+@Builder
+@AllArgsConstructor(access = AccessLevel.PUBLIC)
+public class ResolvedDependency implements Serializable {
+
     /**
      * This will be {@code null} when this is a project dependency.
      */
@@ -49,7 +52,19 @@ public class ResolvedDependency {
 
     List<License> licenses;
 
+    @Nullable
+    String type;
+
+    @Nullable
+    String classifier;
+
+    @Nullable
+    Boolean optional;
+
     int depth;
+
+    @NonFinal
+    List<GroupArtifact> effectiveExclusions;
 
     /**
      * Only used by dependency resolution to avoid unnecessary empty list allocations for leaf dependencies.
@@ -57,6 +72,10 @@ public class ResolvedDependency {
      */
     void unsafeSetDependencies(List<ResolvedDependency> dependencies) {
         this.dependencies = dependencies;
+    }
+
+    void unsafeSetEffectiveExclusions(List<GroupArtifact> effectiveExclusions) {
+        this.effectiveExclusions = effectiveExclusions;
     }
 
     public ResolvedGroupArtifactVersion getGav() {
@@ -76,22 +95,14 @@ public class ResolvedDependency {
     }
 
     public String getType() {
-        return requested.getType() == null ? "jar" : requested.getType();
-    }
-
-    @Nullable
-    public String getClassifier() {
-        return requested.getClassifier();
-    }
-
-    public boolean isOptional() {
-        return requested.isOptional();
+        return type == null ? "jar" : type;
     }
 
     public boolean isDirect() {
         return depth == 0;
     }
 
+    @SuppressWarnings("unused")
     public boolean isTransitive() {
         return depth != 0;
     }
@@ -108,7 +119,6 @@ public class ResolvedDependency {
         }
         outer:
         for (ResolvedDependency dependency : dependencies) {
-
             ResolvedDependency found = dependency.findDependency(groupId, artifactId);
             if (found != null) {
                 if (getRequested().getExclusions() != null) {

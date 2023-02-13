@@ -198,7 +198,7 @@ class GroovyTypeMapping implements JavaTypeMapping<ASTNode> {
             }
         }
 
-        gtv.unsafeSet(variance, bounds);
+        gtv.unsafeSet(gtv.getName(), variance, bounds);
         return gtv;
     }
 
@@ -243,16 +243,18 @@ class GroovyTypeMapping implements JavaTypeMapping<ASTNode> {
         }
 
         List<JavaType.FullyQualified> thrownExceptions = null;
-        for (ClassNode e : node.getExceptions()) {
-            thrownExceptions = new ArrayList<>(node.getExceptions().length);
-            JavaType.FullyQualified qualified = (JavaType.FullyQualified) type(e);
-            thrownExceptions.add(qualified);
+        if(node.getExceptions() != null) {
+            for (ClassNode e : node.getExceptions()) {
+                thrownExceptions = new ArrayList<>(node.getExceptions().length);
+                JavaType.FullyQualified qualified = TypeUtils.asFullyQualified(type(e));
+                thrownExceptions.add(qualified);
+            }
         }
 
         List<JavaType.FullyQualified> annotations = getAnnotations(node);
 
         method.unsafeSet(
-                (JavaType.FullyQualified) type(node.getDeclaringClass()),
+                TypeUtils.asFullyQualified(type(node.getDeclaringClass())),
                 type(node.getReturnType()),
                 parameterTypes,
                 thrownExceptions,

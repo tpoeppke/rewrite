@@ -96,15 +96,16 @@ public class MethodNameCasing extends Recipe {
             @Override
             public J.MethodDeclaration visitMethodDeclaration(J.MethodDeclaration method, ExecutionContext executionContext) {
                 J.ClassDeclaration enclosingClass = getCursor().firstEnclosing(J.ClassDeclaration.class);
-                if(enclosingClass == null) {
+                if (enclosingClass == null || enclosingClass.getKind() != J.ClassDeclaration.Kind.Type.Class) {
                     return method;
                 }
                 if (containsValidModifiers(method) &&
-                        method.getMethodType() != null &&
-                        enclosingClass.getType() != null &&
-                        !method.isConstructor() &&
-                        !TypeUtils.isOverride(method.getMethodType()) &&
-                        !standardMethodName.matcher(method.getSimpleName()).matches()) {
+                    method.getMethodType() != null &&
+                    enclosingClass.getType() != null &&
+                    !method.isConstructor() &&
+                    !TypeUtils.isOverride(method.getMethodType()) &&
+                    !standardMethodName.matcher(method.getSimpleName()).matches() &&
+                    !method.getSimpleName().startsWith("_")) {
                     StringBuilder standardized = new StringBuilder();
                     String normalized = VariableNameUtils.normalizeName(method.getSimpleName());
                     char[] name = normalized.toCharArray();
@@ -135,8 +136,11 @@ public class MethodNameCasing extends Recipe {
                         }
                     }
                     if (!StringUtils.isBlank(standardized.toString())
-                            && !methodExists(method.getMethodType(), standardized.toString())) {
-                        doNext(new ChangeMethodName(MethodMatcher.methodPattern(method), standardized.toString(), true, false));
+                        && !methodExists(method.getMethodType(), standardized.toString())) {
+                        String toName = standardized.toString();
+                        if (!StringUtils.isNumeric(toName)) {
+                            doNext(new ChangeMethodName(MethodMatcher.methodPattern(method), standardized.toString(), true, false));
+                        }
                     }
                 }
 
@@ -144,7 +148,7 @@ public class MethodNameCasing extends Recipe {
             }
 
             private boolean containsValidModifiers(J.MethodDeclaration method) {
-                return !method.hasModifier(J.Modifier.Type.Public) || !Boolean.FALSE.equals(renamePublicMethods);
+                return !method.hasModifier(J.Modifier.Type.Public) || Boolean.TRUE.equals(renamePublicMethods);
             }
 
             private boolean methodExists(JavaType.Method method, String newName) {

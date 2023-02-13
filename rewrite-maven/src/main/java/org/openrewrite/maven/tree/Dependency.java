@@ -15,14 +15,16 @@
  */
 package org.openrewrite.maven.tree;
 
-import lombok.Value;
-import lombok.With;
+import lombok.*;
 import org.openrewrite.internal.lang.Nullable;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Value
-public class Dependency {
+@Builder
+@AllArgsConstructor(access = AccessLevel.PUBLIC)
+public class Dependency implements Serializable {
     GroupArtifactVersion gav;
 
     @With
@@ -40,7 +42,8 @@ public class Dependency {
     List<GroupArtifact> exclusions;
 
     @With
-    boolean optional;
+    @Nullable
+    String optional;
 
     @Nullable
     public String getGroupId() {

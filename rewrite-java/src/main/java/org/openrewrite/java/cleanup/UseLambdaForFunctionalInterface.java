@@ -28,10 +28,7 @@ import org.openrewrite.java.style.Checkstyle;
 import org.openrewrite.java.tree.*;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Collections;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -66,10 +63,10 @@ public class UseLambdaForFunctionalInterface extends Recipe {
             public J visitNewClass(J.NewClass newClass, ExecutionContext ctx) {
                 J.NewClass n = (J.NewClass) super.visitNewClass(newClass, ctx);
                 if (n.getBody() != null &&
-                        n.getBody().getStatements().size() == 1 &&
-                        n.getBody().getStatements().get(0) instanceof J.MethodDeclaration &&
-                        n.getClazz() != null) {
-                    JavaType.Class type = TypeUtils.asClass(n.getClazz().getType());
+                    n.getBody().getStatements().size() == 1 &&
+                    n.getBody().getStatements().get(0) instanceof J.MethodDeclaration &&
+                    n.getClazz() != null) {
+                    JavaType.@Nullable FullyQualified type = TypeUtils.asFullyQualified(n.getClazz().getType());
                     if (type != null && type.getKind().equals(JavaType.Class.Kind.Interface)) {
                         JavaType.Method sam = null;
                         for (JavaType.Method method : type.getMethods()) {
@@ -85,7 +82,8 @@ public class UseLambdaForFunctionalInterface extends Recipe {
                             return n;
                         }
 
-                        if (usesThis(getCursor()) || shadowsLocalVariable(getCursor())) {
+                        if (usesThis(getCursor()) || shadowsLocalVariable(getCursor()) ||
+                            usedAsStatement(getCursor())) {
                             return n;
                         }
 
@@ -210,6 +208,29 @@ public class UseLambdaForFunctionalInterface extends Recipe {
                 .filter(s -> s instanceof J.VariableDeclarations)
                 .map(v -> ((J.VariableDeclarations) v).getVariables().get(0).getSimpleName())
                 .collect(Collectors.toList());
+    }
+
+    private static boolean usedAsStatement(Cursor cursor) {
+        Iterator<Object> path = cursor.getParentOrThrow().getPath();
+        for (Object last = cursor.getValue(); path.hasNext(); ) {
+            Object next = path.next();
+            if (next instanceof J.Block) {
+                return true;
+            } else if (next instanceof J && !(next instanceof J.MethodInvocation)) {
+                return false;
+            } else if (next instanceof J.MethodInvocation) {
+                for (Expression argument : ((J.MethodInvocation) next).getArguments()) {
+                    if (argument == last) {
+                        return false;
+                    }
+                }
+            }
+
+            if (next instanceof J) {
+                last = next;
+            }
+        }
+        return false;
     }
 
     // if the contents of the cursor value shadow a local variable in its containing name scope

@@ -1,5 +1,6 @@
 plugins {
     id("org.openrewrite.build.language-library")
+    id("jvm-test-suite")
 }
 
 dependencies {
@@ -13,7 +14,6 @@ dependencies {
     implementation("org.ow2.asm:asm:latest.release")
 
     testImplementation(project(":rewrite-test"))
-    testImplementation(project(":rewrite-java-tck"))
 }
 
 java {
@@ -22,14 +22,8 @@ java {
     }
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-}
-
-
 tasks.withType<JavaCompile> {
+    // allows --add-exports to in spite of the JDK's restrictions on this
     sourceCompatibility = JavaVersion.VERSION_11.toString()
     targetCompatibility = JavaVersion.VERSION_11.toString()
 
@@ -55,4 +49,33 @@ tasks.withType<Javadoc> {
         "**/ReloadableJava11TypeMapping**",
         "**/ReloadableJava11TypeSignatureBuilder**"
     )
+}
+
+testing {
+    suites {
+        val test by getting(JvmTestSuite::class)
+
+        register("compatibilityTest", JvmTestSuite::class) {
+            dependencies {
+                implementation(project())
+                implementation(project(":rewrite-java-tck"))
+            }
+
+            targets {
+                all {
+                    testTask.configure {
+                        useJUnitPlatform {
+                            excludeTags("java11", "java17")
+                        }
+                        jvmArgs = listOf("-XX:+UnlockDiagnosticVMOptions", "-XX:+ShowHiddenFrames")
+                        shouldRunAfter(test)
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(testing.suites.named("compatibilityTest"))
 }

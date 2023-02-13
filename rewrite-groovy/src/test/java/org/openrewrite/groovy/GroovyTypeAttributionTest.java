@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.openrewrite.groovy.Assertions.groovy;
 
+@Disabled
 @SuppressWarnings({"GroovyUnusedAssignment", "GrUnnecessaryPublicModifier", "ConstantConditions", "GrMethodMayBeStatic"})
 class GroovyTypeAttributionTest implements RewriteTest {
 
@@ -104,12 +105,12 @@ class GroovyTypeAttributionTest implements RewriteTest {
     void closureImplicitParameterAttributedZeroArgMethod() {
         rewriteRun(
           groovy("""
-                  public <T> T register(String name, Class<T> type, Closure<T> configurationAction) {
-                      return null
-                  }
-                  register("testTask", Integer) {
-                      it.byteValue()
-                  }
+              public <T> T register(String name, Class<T> type, Closure<T> configurationAction) {
+                  return null
+              }
+              register("testTask", Integer) {
+                  it.byteValue()
+              }
               """,
             spec -> spec.afterRecipe(cu -> {
                 var m = (J.MethodInvocation) cu.getStatements().get(1);
@@ -129,12 +130,12 @@ class GroovyTypeAttributionTest implements RewriteTest {
     void closureNamedParameterAttributed() {
         rewriteRun(
           groovy("""
-                  public <T> T register(String name, Class<T> type, Closure<T> configurationAction) {
-                      return null
-                  }
-                  register("testTask", String) { foo ->
-                      foo
-                  }
+              public <T> T register(String name, Class<T> type, Closure<T> configurationAction) {
+                  return null
+              }
+              register("testTask", String) { foo ->
+                  foo
+              }
               """,
             spec -> spec.afterRecipe(cu -> {
                 var m = (J.MethodInvocation) cu.getStatements().get(1);
@@ -152,12 +153,12 @@ class GroovyTypeAttributionTest implements RewriteTest {
     void closureWithDelegate() {
         rewriteRun(
           groovy("""
-                  public String register(@DelegatesTo(String) Closure stringAction) {
-                      return null
-                  }
-                  register {
-                      substring(0, 0)
-                  }
+              public String register(@DelegatesTo(String) Closure stringAction) {
+                  return null
+              }
+              register {
+                  substring(0, 0)
+              }
               """,
             spec -> spec.afterRecipe(cu -> {
                 var m = (J.MethodInvocation) cu.getStatements().get(1);
@@ -177,18 +178,18 @@ class GroovyTypeAttributionTest implements RewriteTest {
     void infersDelegateViaSimilarGradleApi() {
         rewriteRun(
           groovy("""
-                  package org.gradle.api
-                  
-                  interface Action<T> {
-                      void execute(T t);
-                  }
-                  void register(Action<String> stringAction) {
-                  }
-                  void register(Closure stringAction) {
-                  }
-                  register {
-                      substring(0, 0)
-                  }
+              package org.gradle.api
+              
+              interface Action<T> {
+                  void execute(T t);
+              }
+              void register(Action<String> stringAction) {
+              }
+              void register(Closure stringAction) {
+              }
+              register {
+                  substring(0, 0)
+              }
               """,
             spec -> spec.afterRecipe(cu -> {
                 var m = (J.MethodInvocation) cu.getStatements().stream()

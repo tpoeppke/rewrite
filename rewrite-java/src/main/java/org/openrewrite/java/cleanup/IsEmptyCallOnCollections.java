@@ -15,15 +15,12 @@
  */
 package org.openrewrite.java.cleanup;
 
-import org.openrewrite.ExecutionContext;
-import org.openrewrite.Recipe;
-import org.openrewrite.TreeVisitor;
+import org.openrewrite.*;
 import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.JavaVisitor;
 import org.openrewrite.java.MethodMatcher;
 import org.openrewrite.java.search.UsesMethod;
-import org.openrewrite.java.tree.Expression;
-import org.openrewrite.java.tree.J;
+import org.openrewrite.java.tree.*;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -68,16 +65,21 @@ public class IsEmptyCallOnCollections extends Recipe {
 
             @Override
             public J visitBinary(J.Binary binary, ExecutionContext ctx) {
-                if (binary.getOperator() == J.Binary.Type.Equal || binary.getOperator() == J.Binary.Type.NotEqual) {
-                    if (COLLECTION_SIZE.matches(binary.getLeft()) || COLLECTION_SIZE.matches(binary.getRight())) {
-                        if (isZero(binary.getLeft()) || isZero(binary.getRight())) {
-                            J.MethodInvocation sizeCall = (J.MethodInvocation) (COLLECTION_SIZE.matches(binary.getLeft()) ?
-                                    binary.getLeft() : binary.getRight());
-                            String op = binary.getOperator() == J.Binary.Type.Equal ? "" : "!";
-                            return (sizeCall.getSelect() == null ?
-                                sizeCall.withTemplate(isEmptyNoReceiver, sizeCall.getCoordinates().replace(), op) :
-                                sizeCall.withTemplate(isEmpty, sizeCall.getCoordinates().replace(), op, sizeCall.getSelect())
-                            ).withPrefix(binary.getPrefix());
+                if (isZero(binary.getLeft()) || isZero(binary.getRight())) {
+                    boolean zeroRight = isZero(binary.getRight());
+                    J maybeSizeCall = zeroRight ? binary.getLeft() : binary.getRight();
+                    if (binary.getOperator() == J.Binary.Type.Equal || binary.getOperator() == J.Binary.Type.NotEqual
+                        || zeroRight && binary.getOperator() == J.Binary.Type.GreaterThan
+                        || !zeroRight && binary.getOperator() == J.Binary.Type.LessThan) {
+                        if(maybeSizeCall instanceof J.MethodInvocation) {
+                            J.MethodInvocation maybeSizeCallMethod = (J.MethodInvocation) maybeSizeCall;
+                            if (COLLECTION_SIZE.matches(maybeSizeCallMethod)) {
+                                String op = binary.getOperator() == J.Binary.Type.Equal ? "" : "!";
+                                return (maybeSizeCallMethod.getSelect() == null ?
+                                        binary.withTemplate(isEmptyNoReceiver, binary.getCoordinates().replace(), op) :
+                                        binary.withTemplate(isEmpty, binary.getCoordinates().replace(), op, maybeSizeCallMethod.getSelect())
+                                ).withPrefix(binary.getPrefix());
+                            }
                         }
                     }
                 }

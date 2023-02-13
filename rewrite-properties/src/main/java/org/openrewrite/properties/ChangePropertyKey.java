@@ -15,6 +15,7 @@
  */
 package org.openrewrite.properties;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.EqualsAndHashCode;
 import lombok.Value;
 import org.openrewrite.*;
@@ -52,6 +53,30 @@ public class ChangePropertyKey extends Recipe {
     @Nullable
     String fileMatcher;
 
+    @Option(displayName = "Regex",
+            description = "Default false. If enabled, `oldPropertyKey` will be interepreted as a Regular Expression, and capture group contents will be available in `newPropertyKey`",
+            required = false,
+            example = "true")
+    @Nullable
+    Boolean regex;
+
+    @Deprecated
+    public ChangePropertyKey(String oldPropertyKey, String newPropertyKey,
+            @Nullable Boolean relaxedBinding, @Nullable String fileMatcher) {
+        this(oldPropertyKey, newPropertyKey, relaxedBinding, fileMatcher, null);
+    }
+
+    @JsonCreator
+    public ChangePropertyKey(String oldPropertyKey, String newPropertyKey,
+            @Nullable Boolean relaxedBinding, @Nullable String fileMatcher,
+            @Nullable Boolean regex) {
+        this.oldPropertyKey = oldPropertyKey;
+        this.newPropertyKey = newPropertyKey;
+        this.relaxedBinding = relaxedBinding;
+        this.fileMatcher = fileMatcher;
+        this.regex = regex;
+    }
+
     @Override
     public String getDisplayName() {
         return "Change property key";
@@ -81,8 +106,20 @@ public class ChangePropertyKey extends Recipe {
 
         @Override
         public Properties visitEntry(Properties.Entry entry, P p) {
-            if (!Boolean.FALSE.equals(relaxedBinding) ? NameCaseConvention.equalsRelaxedBinding(entry.getKey(), oldPropertyKey) : entry.getKey().equals(oldPropertyKey)) {
-                entry = entry.withKey(newPropertyKey).withPrefix(entry.getPrefix());
+            if (Boolean.TRUE.equals(regex)) {
+                if (!Boolean.FALSE.equals(relaxedBinding)
+                        ? NameCaseConvention.matchesRegexRelaxedBinding(entry.getKey(), oldPropertyKey)
+                        : entry.getKey().matches(oldPropertyKey)) {
+                    entry = entry.withKey(entry.getKey().replaceFirst(oldPropertyKey, newPropertyKey))
+                            .withPrefix(entry.getPrefix());
+                }
+            } else {
+                if (!Boolean.FALSE.equals(relaxedBinding)
+                        ? NameCaseConvention.equalsRelaxedBinding(entry.getKey(), oldPropertyKey)
+                        : entry.getKey().equals(oldPropertyKey)) {
+                    entry = entry.withKey(newPropertyKey)
+                            .withPrefix(entry.getPrefix());
+                }
             }
             return super.visitEntry(entry, p);
         }

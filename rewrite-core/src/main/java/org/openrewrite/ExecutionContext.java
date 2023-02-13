@@ -31,6 +31,7 @@ import java.util.function.Supplier;
 public interface ExecutionContext {
     String CURRENT_RECIPE = "org.openrewrite.currentRecipe";
     String UNCAUGHT_EXCEPTION_COUNT = "org.openrewrite.uncaughtExceptionCount";
+    String DATA_TABLES = "org.openrewrite.dataTables";
 
     @Incubating(since = "7.20.0")
     default ExecutionContext addObserver(TreeObserver.Subscription observer) {
@@ -41,17 +42,17 @@ public interface ExecutionContext {
 
     @Incubating(since = "7.20.0")
     default Set<TreeObserver.Subscription> getObservers() {
-        return getMessage("org.openrewrite.internal.treeObservers", Collections.<TreeObserver.Subscription>emptySet());
+        return getMessage("org.openrewrite.internal.treeObservers", Collections.emptySet());
     }
 
     void putMessage(String key, @Nullable Object value);
 
     @Nullable <T> T getMessage(String key);
 
-    default <V, T> T computeMessage(String key, V value, T defaultValue, BiFunction<V, ? super T, ? extends T> remappingFunction) {
+    default <V, T> T computeMessage(String key, V value, Supplier<T> defaultValue, BiFunction<V, ? super T, ? extends T> remappingFunction) {
         T oldMessage = getMessage(key);
         if (oldMessage == null) {
-            oldMessage = defaultValue;
+            oldMessage = defaultValue.get();
         }
         T newMessage = remappingFunction.apply(value, oldMessage);
         putMessage(key, newMessage);
@@ -59,7 +60,7 @@ public interface ExecutionContext {
     }
 
     default <V, C extends Collection<V>> C putMessageInCollection(String key, V value, Supplier<C> newCollection) {
-        return computeMessage(key, value, newCollection.get(), (v, acc) -> {
+        return computeMessage(key, value, newCollection, (v, acc) -> {
             C c = newCollection.get();
             c.addAll(acc);
             c.add(value);

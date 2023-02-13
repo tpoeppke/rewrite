@@ -117,6 +117,12 @@ public class JavaPrinter<P> extends JavaVisitor<PrintOutputCapture<P>> {
             case Native:
                 keyword = "native";
                 break;
+            case NonSealed:
+                keyword = "non-sealed";
+                break;
+            case Sealed:
+                keyword = "sealed";
+                break;
             case Strictfp:
                 keyword = "strictfp";
                 break;
@@ -374,6 +380,19 @@ public class JavaPrinter<P> extends JavaVisitor<PrintOutputCapture<P>> {
                 s = ((Label) s).getStatement();
                 continue;
             }
+
+            if (getCursor().getValue() instanceof Case) {
+                Object aSwitch = getCursor().dropParentUntil(c -> c instanceof Switch || c instanceof SwitchExpression)
+                        .getValue();
+                if (aSwitch instanceof J.SwitchExpression) {
+                    Case aCase = getCursor().getValue();
+                    if (!(aCase.getBody() instanceof J.Block)) {
+                        p.append(';');
+                    }
+                    return;
+                }
+            }
+
             return;
         }
     }
@@ -456,6 +475,7 @@ public class JavaPrinter<P> extends JavaVisitor<PrintOutputCapture<P>> {
         visitLeftPadded("extends", classDecl.getPadding().getExtends(), JLeftPadded.Location.EXTENDS, p);
         visitContainer(classDecl.getKind().equals(ClassDeclaration.Kind.Type.Interface) ? "extends" : "implements",
                 classDecl.getPadding().getImplements(), JContainer.Location.IMPLEMENTS, ",", null, p);
+        visitContainer("permits", classDecl.getPadding().getPermits(), JContainer.Location.PERMITS, ",", null, p);
         visit(classDecl.getBody(), p);
         afterSyntax(classDecl, p);
         return classDecl;

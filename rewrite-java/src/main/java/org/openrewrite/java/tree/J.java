@@ -704,6 +704,11 @@ public interface J extends Tree {
         }
     }
 
+    /**
+     * A block of statements, enclosed in curly braces.
+     * <p>
+     * To create an empty block, use {@link #createEmptyBlock()}.
+     */
     @ToString
     @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
     @EqualsAndHashCode(callSuper = false, onlyExplicitlyIncluded = true)
@@ -795,6 +800,17 @@ public interface J extends Tree {
             public Block withStatements(List<JRightPadded<Statement>> statements) {
                 return t.statements == statements ? t : new Block(t.id, t.prefix, t.markers, t.statik, statements, t.end);
             }
+        }
+
+        public static J.Block createEmptyBlock() {
+            return new J.Block(
+                    Tree.randomId(),
+                    Space.EMPTY,
+                    Markers.EMPTY,
+                    JRightPadded.build(false),
+                    Collections.emptyList(),
+                    Space.EMPTY
+            );
         }
 
         @SelfLoathing(name = "Jonathan Leitschuh")
@@ -1156,6 +1172,18 @@ public interface J extends Tree {
             return getPadding().withImplements(JContainer.withElementsNullable(this.implementings, implementings));
         }
 
+        @Nullable
+        JContainer<TypeTree> permitting;
+
+        @Nullable
+        public List<TypeTree> getPermits() {
+            return permitting == null ? null : permitting.getElements();
+        }
+
+        public ClassDeclaration withPermits(@Nullable List<TypeTree> permitting) {
+            return getPadding().withPermits(JContainer.withElementsNullable(this.permitting, permitting));
+        }
+
         @With
         @Getter
         Block body;
@@ -1175,7 +1203,7 @@ public interface J extends Tree {
                 throw new IllegalArgumentException("A class can only be type attributed with a fully qualified type name");
             }
 
-            return new ClassDeclaration(id, prefix, markers, leadingAnnotations, modifiers, kind, name, typeParameters, primaryConstructor, extendings, implementings, body, (JavaType.FullyQualified) type);
+            return new ClassDeclaration(id, prefix, markers, leadingAnnotations, modifiers, kind, name, typeParameters, primaryConstructor, extendings, implementings, permitting, body, (JavaType.FullyQualified) type);
         }
 
         @Override
@@ -1267,7 +1295,7 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withPrimaryConstructor(@Nullable JContainer<Statement> primaryConstructor) {
-                return t.primaryConstructor == primaryConstructor ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, primaryConstructor, t.extendings, t.implementings, t.body, t.type);
+                return t.primaryConstructor == primaryConstructor ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, primaryConstructor, t.extendings, t.implementings, t.permitting, t.body, t.type);
             }
 
             @Nullable
@@ -1276,7 +1304,7 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withExtends(@Nullable JLeftPadded<TypeTree> extendings) {
-                return t.extendings == extendings ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, t.primaryConstructor, extendings, t.implementings, t.body, t.type);
+                return t.extendings == extendings ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, t.primaryConstructor, extendings, t.implementings, t.permitting, t.body, t.type);
             }
 
             @Nullable
@@ -1285,7 +1313,16 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withImplements(@Nullable JContainer<TypeTree> implementings) {
-                return t.implementings == implementings ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, implementings, t.body, t.type);
+                return t.implementings == implementings ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, implementings, t.permitting, t.body, t.type);
+            }
+
+            @Nullable
+            public JContainer<TypeTree> getPermits() {
+                return t.permitting;
+            }
+
+            public ClassDeclaration withPermits(@Nullable JContainer<TypeTree> permitting) {
+                return t.permitting == permitting ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, t.implementings, permitting, t.body, t.type);
             }
 
             public Kind getKind() {
@@ -1293,7 +1330,7 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withKind(Kind kind) {
-                return t.kind == kind ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.body, t.type);
+                return t.kind == kind ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.permitting, t.body, t.type);
             }
 
             @Nullable
@@ -1302,7 +1339,7 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withTypeParameters(@Nullable JContainer<TypeParameter> typeParameters) {
-                return t.typeParameters == typeParameters ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.body, t.type);
+                return t.typeParameters == typeParameters ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, t.kind, t.name, typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.permitting, t.body, t.type);
             }
         }
 
@@ -1330,7 +1367,7 @@ public interface J extends Tree {
             }
 
             public ClassDeclaration withKind(Kind kind) {
-                return t.kind == kind ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.body, t.type);
+                return t.kind == kind ? t : new ClassDeclaration(t.id, t.prefix, t.markers, t.leadingAnnotations, t.modifiers, kind, t.name, t.typeParameters, t.primaryConstructor, t.extendings, t.implementings, t.permitting, t.body, t.type);
             }
         }
     }
@@ -2751,6 +2788,12 @@ public interface J extends Tree {
             return new CoordinateBuilder.Expression(this);
         }
 
+        @Override
+        @Transient
+        public List<J> getSideEffects() {
+            return expression.getElement().getSideEffects();
+        }
+
         public Padding getPadding() {
             Padding p;
             if (this.padding == null) {
@@ -3739,6 +3782,8 @@ public interface J extends Tree {
             Abstract,
             Static,
             Final,
+            Sealed,
+            NonSealed,
             Transient,
             Volatile,
             Synchronized,
@@ -4076,7 +4121,7 @@ public interface J extends Tree {
         }
 
         /**
-         * This is an alias for {@link #getConstructorType()}.
+         * This is an alias for {@link J.NewClass#getConstructorType()}.
          *
          * @return The constructor type.
          */
@@ -4086,7 +4131,7 @@ public interface J extends Tree {
         }
 
         /**
-         * This is an alias for {@link #withConstructorType(JavaType.Method)}.
+         * This is an alias for {@link J.NewClass#withConstructorType(JavaType.Method)}.
          *
          * @param methodType The constructor type.
          * @return An instance with the new constructor type.
@@ -4228,6 +4273,11 @@ public interface J extends Tree {
         @Nullable
         JContainer<Expression> typeParameters;
 
+        @With
+        @Getter
+        @Nullable
+        JavaType type;
+
         @Nullable
         public List<Expression> getTypeParameters() {
             return typeParameters == null ? null : typeParameters.getElements();
@@ -4235,20 +4285,6 @@ public interface J extends Tree {
 
         public ParameterizedType withTypeParameters(@Nullable List<Expression> typeParameters) {
             return getPadding().withTypeParameters(JContainer.withElementsNullable(this.typeParameters, typeParameters));
-        }
-
-        @Override
-        public JavaType getType() {
-            return clazz.getType();
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public ParameterizedType withType(@Nullable JavaType type) {
-            if (type == clazz.getType()) {
-                return this;
-            }
-            return withClazz(clazz.withType(type));
         }
 
         @Override
@@ -4292,7 +4328,7 @@ public interface J extends Tree {
             }
 
             public ParameterizedType withTypeParameters(@Nullable JContainer<Expression> typeParameters) {
-                return t.typeParameters == typeParameters ? t : new ParameterizedType(t.id, t.prefix, t.markers, t.clazz, typeParameters);
+                return t.typeParameters == typeParameters ? t : new ParameterizedType(t.id, t.prefix, t.markers, t.clazz, typeParameters, t.type);
             }
         }
     }
@@ -5058,6 +5094,12 @@ public interface J extends Tree {
         public CoordinateBuilder.Expression getCoordinates() {
             return new CoordinateBuilder.Expression(this);
         }
+
+        @Override
+        @Transient
+        public List<J> getSideEffects() {
+            return expression.getSideEffects();
+        }
     }
 
     @ToString
@@ -5261,13 +5303,13 @@ public interface J extends Tree {
         @Override
         @Transient
         public CoordinateBuilder.Statement getCoordinates() {
-            return new CoordinateBuilder.Statement(this);
+            return new CoordinateBuilder.Unary(this);
         }
 
         @Override
         @Transient
         public List<J> getSideEffects() {
-            return expression.getSideEffects();
+            return getOperator().isModifying() ? singletonList(this) : expression.getSideEffects();
         }
 
         public enum Type {
@@ -5497,13 +5539,12 @@ public interface J extends Tree {
             }
 
             public boolean isField(Cursor cursor) {
-                return cursor
-                        .getParentOrThrow() // JRightPadded
-                        .getParentOrThrow() // J.VariableDeclarations
-                        .getParentOrThrow() // JRightPadded
-                        .getParentOrThrow() // J.Block
-                        .getParentOrThrow() // maybe J.ClassDeclaration
-                        .getValue() instanceof ClassDeclaration;
+                Cursor declaringScope = cursor.dropParentUntil(it -> it instanceof J.Block || it instanceof J.Lambda
+                        || it instanceof J.MethodDeclaration || it == Cursor.ROOT_VALUE);
+                if(!(declaringScope.getValue() instanceof J.Block)) {
+                    return false;
+                }
+                return declaringScope.getParentTreeCursor().getValue() instanceof J.ClassDeclaration;
             }
 
             public Padding getPadding() {

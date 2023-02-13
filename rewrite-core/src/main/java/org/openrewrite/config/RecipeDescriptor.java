@@ -49,5 +49,8 @@ public class RecipeDescriptor {
     @With
     List<RecipeDescriptor> recipeList;
 
+    @With
+    List<DataTableDescriptor> dataTables;
+
     URI source;
 }

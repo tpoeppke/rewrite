@@ -15,17 +15,12 @@
  */
 package org.openrewrite.gradle.util;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import lombok.Value;
-import org.openrewrite.Checksum;
-import org.openrewrite.ExecutionContext;
-import org.openrewrite.FileAttributes;
-import org.openrewrite.HttpSenderExecutionContextView;
-import org.openrewrite.Validated;
+import org.openrewrite.*;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.ipc.http.HttpSender;
 import org.openrewrite.remote.Remote;
@@ -52,10 +47,12 @@ public class GradleWrapper {
     String version;
     DistributionInfos distributionInfos;
 
-    public static Validated validate(ExecutionContext ctx,
-                                     String version,
-                                     @Nullable String distribution,
-                                     @Nullable Validated cachedValidation) {
+    public static Validated validate(
+            ExecutionContext ctx,
+            String version,
+            @Nullable String distribution,
+            @Nullable Validated cachedValidation,
+            @Nullable String repositoryUrl) {
         if (cachedValidation != null) {
             return cachedValidation;
         }
@@ -64,15 +61,10 @@ public class GradleWrapper {
 
         //noinspection unchecked
         return new Validated.Both(
-                Validated.test("distributionType", "must be a valid distribution type", distributionTypeName, dt -> {
-                    try {
-                        DistributionType.valueOf(dt);
-                        return true;
-                    } catch (Throwable e) {
-                        return false;
-                    }
-                }),
-                Semver.validate(version, null)
+            Validated.test("distributionType", "must be a valid distribution type", distributionTypeName,
+                dt -> Arrays.stream(DistributionType.values())
+                    .anyMatch(type -> type.name().equalsIgnoreCase(dt))),
+            Semver.validate(version, null)
         ) {
             GradleWrapper wrapper;
 
@@ -105,16 +97,18 @@ public class GradleWrapper {
                         .orElseThrow(() -> new IllegalArgumentException("Unknown distribution type " + distributionTypeName));
                 VersionComparator versionComparator = requireNonNull(Semver.validate(version, null).getValue());
 
-                String gradleVersionsUrl = "https://services.gradle.org/versions/all";
+                String gradleVersionsUrl = (repositoryUrl == null) ?  "https://services.gradle.org/versions/all" : repositoryUrl;
                 try (HttpSender.Response resp = httpSender.send(httpSender.get(gradleVersionsUrl).build())) {
                     if (resp.isSuccessful()) {
                         List<GradleVersion> allVersions = new ObjectMapper()
-                            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                            .readValue(resp.getBody(), new TypeReference<List<GradleVersion>>() {});
+                                .registerModule(new ParameterNamesModule())
+                                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                                .readValue(resp.getBody(), new TypeReference<List<GradleVersion>>() {
+                                });
                         GradleVersion gradleVersion = allVersions.stream()
-                            .filter(v -> versionComparator.isValid(null, v.version))
-                            .max((v1, v2) -> versionComparator.compare(null, v1.version, v2.version))
-                            .orElseThrow(() -> new IllegalStateException("Expected to find at least one Gradle wrapper version to select from."));
+                                .filter(v -> versionComparator.isValid(null, v.version))
+                                .max((v1, v2) -> versionComparator.compare(null, v1.version, v2.version))
+                                .orElseThrow(() -> new IllegalStateException("Expected to find at least one Gradle wrapper version to select from."));
 
                         DistributionInfos infos = DistributionInfos.fetch(httpSender, distributionType, gradleVersion);
                         wrapper = new GradleWrapper(gradleVersion.version, infos);
@@ -144,11 +138,15 @@ public class GradleWrapper {
     static final FileAttributes WRAPPER_JAR_FILE_ATTRIBUTES = new FileAttributes(null, null, null, true, true, false, 0);
 
     public Remote asRemote() {
-        return new GradleWrapperJar(URI.create(getDistributionUrl()), version, distributionInfos.getWrapperJarChecksum());
+        return Remote.builder(
+                WRAPPER_JAR_LOCATION,
+                URI.create(distributionInfos.getDownloadUrl())
+        ).build("gradle-[^\\/]+\\/(?:.*\\/)+gradle-wrapper-(?!shared).*\\.jar");
     }
 
     public enum DistributionType {
-        Bin, All
+        Bin,
+        All
     }
 
     @Value
@@ -157,17 +155,5 @@ public class GradleWrapper {
         String downloadUrl;
         String checksumUrl;
         String wrapperChecksumUrl;
-
-        @JsonCreator
-        public GradleVersion(@JsonProperty("version") String version,
-                             @JsonProperty("downloadUrl") String downloadUrl,
-                             @JsonProperty("checksumUrl") String checksumUrl,
-                             @JsonProperty("wrapperChecksumUrl") String wrapperChecksumUrl) {
-            this.version = version;
-            this.downloadUrl = downloadUrl;
-            this.checksumUrl = checksumUrl;
-            this.wrapperChecksumUrl = wrapperChecksumUrl;
-        }
     }
-
 }

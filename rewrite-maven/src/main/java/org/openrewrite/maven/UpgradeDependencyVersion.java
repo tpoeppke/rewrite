@@ -21,6 +21,7 @@ import lombok.Value;
 import org.openrewrite.*;
 import org.openrewrite.internal.ListUtils;
 import org.openrewrite.internal.lang.Nullable;
+import org.openrewrite.maven.table.MavenMetadataFailures;
 import org.openrewrite.maven.tree.*;
 import org.openrewrite.maven.utilities.RetainVersions;
 import org.openrewrite.semver.LatestPatch;
@@ -49,6 +50,9 @@ import static org.openrewrite.internal.StringUtils.matchesGlob;
 @Value
 @EqualsAndHashCode(callSuper = true)
 public class UpgradeDependencyVersion extends Recipe {
+    @EqualsAndHashCode.Exclude
+    MavenMetadataFailures metadataFailures = new MavenMetadataFailures(this);
+
     // there are several implicitly defined version properties that we should never attempt to update
     private static final Set<String> implicitlyDefinedVersionProperties = new HashSet<>(Arrays.asList(
             "${version}", "${project.version}", "${pom.version}", "${project.parent.version}"
@@ -132,7 +136,7 @@ public class UpgradeDependencyVersion extends Recipe {
     }
 
     @Override
-    protected List<SourceFile> visit(List<SourceFile> before, ExecutionContext ctx) {
+    public List<SourceFile> visit(List<SourceFile> before, ExecutionContext ctx) {
         // first collect all POMs in the list of source files, any dependencies/managed dependencies that reference
         // a project pom should be excluded from consideration when upgrading dependencies
         Set<GroupArtifact> projectArtifacts = new HashSet<>();
@@ -317,7 +321,7 @@ public class UpgradeDependencyVersion extends Recipe {
             }
 
             try {
-                MavenMetadata mavenMetadata = downloadMetadata(groupId, artifactId, ctx);
+                MavenMetadata mavenMetadata = metadataFailures.insertRows(ctx, () -> downloadMetadata(groupId, artifactId, ctx));
                 List<String> versions = new ArrayList<>();
                 for (String v : mavenMetadata.getVersioning().getVersions()) {
                     if (versionComparator.isValid(version, v)) {

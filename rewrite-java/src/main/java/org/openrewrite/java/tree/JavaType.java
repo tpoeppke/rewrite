@@ -289,7 +289,8 @@ public interface JavaType {
             Class,
             Enum,
             Interface,
-            Annotation
+            Annotation,
+            Record
         }
     }
 
@@ -648,6 +649,7 @@ public interface JavaType {
         Integer managedReference;
 
         @With
+        @NonFinal
         @Getter
         String name;
 
@@ -685,6 +687,20 @@ public interface JavaType {
             return this;
         }
 
+        public GenericTypeVariable unsafeSet(String name, Variance variance, @Nullable List<JavaType> bounds) {
+            this.name = name;
+            this.variance = variance;
+            this.bounds = nullIfEmpty(bounds);
+            return this;
+        }
+
+        /**
+         * @param variance The new variance
+         * @param bounds The new bounds
+         * @return This instance, with modifications/
+         * @deprecated Use {@link #unsafeSet(String, Variance, List)} instead.
+         */
+        @Deprecated
         public GenericTypeVariable unsafeSet(Variance variance, @Nullable List<JavaType> bounds) {
             this.variance = variance;
             this.bounds = nullIfEmpty(bounds);
@@ -965,6 +981,37 @@ public interface JavaType {
             return declaringType;
         }
 
+        public boolean isOverride() {
+            if (declaringType instanceof JavaType.Unknown) {
+                return false;
+            }
+
+            Stack<FullyQualified> interfaces = new Stack<>();
+            interfaces.addAll(declaringType.getInterfaces());
+
+            while (!interfaces.isEmpty()) {
+                FullyQualified declaring = interfaces.pop();
+                interfaces.addAll(declaring.getInterfaces());
+
+                nextMethod:
+                for (Method method : declaring.getMethods()) {
+                    if (method.getName().equals(name)) {
+                        List<JavaType> params = method.getParameterTypes();
+                        if (getParameterTypes().size() != method.getParameterTypes().size()) {
+                            continue;
+                        }
+                        for (int i = 0; i < params.size(); i++) {
+                            if (!TypeUtils.isOfType(getParameterTypes().get(i), params.get(i))) {
+                                continue nextMethod;
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public boolean isInheritedFrom(String fullyQualifiedTypeName) {
             if (declaringType instanceof JavaType.Unknown) {
                 return false;
@@ -1090,7 +1137,7 @@ public interface JavaType {
         @NonFinal
         Integer managedReference;
 
-        @With(AccessLevel.NONE)
+        @With(AccessLevel.PRIVATE)
         long flagsBitMap;
 
         @With
@@ -1142,6 +1189,10 @@ public interface JavaType {
 
         public Set<Flag> getFlags() {
             return Flag.bitMapToFlags(flagsBitMap);
+        }
+
+        public Variable withFlags(Set<Flag> flags) {
+            return withFlagsBitMap(Flag.flagsToBitMap(flags));
         }
 
         @Override

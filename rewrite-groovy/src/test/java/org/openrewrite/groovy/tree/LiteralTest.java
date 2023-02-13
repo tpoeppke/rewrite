@@ -16,6 +16,7 @@
 package org.openrewrite.groovy.tree;
 
 import org.junit.jupiter.api.Test;
+import org.openrewrite.Issue;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.JavaType;
 import org.openrewrite.java.tree.TypeUtils;
@@ -104,9 +105,18 @@ class LiteralTest implements RewriteTest {
           groovy(
             """
               def person = [name: 'sam']
-              def s = "name: $person.name"
+              def s = \""" ${person.name} \"""
               """
           )
+        );
+    }
+
+    @Test
+    void gStringInterpolateString() {
+        rewriteRun(
+          groovy("""
+            " ${""}\\n${" "} "
+            """)
         );
     }
 
@@ -126,7 +136,7 @@ class LiteralTest implements RewriteTest {
         rewriteRun(
           groovy(
             """
-                  def person = [ name: 'sam' , age: 9000 ]
+              def person = [ name: 'sam' , age: 9000 ]
               """
           )
         );
@@ -137,10 +147,10 @@ class LiteralTest implements RewriteTest {
         rewriteRun(
           groovy(
             """
-                  float a = 0.1
-                  def b = 0.1f
-                  double c = 1.0d
-                  long d = 1L
+              float a = 0.1
+              def b = 0.1f
+              double c = 1.0d
+              long d = 1L
               """
           )
         );
@@ -227,5 +237,20 @@ class LiteralTest implements RewriteTest {
               """
           )
         );
+    }
+
+    @Test
+    void escapeCharacters() {
+        rewriteRun(
+          groovy(
+            """
+              "\\\\n\\t"
+              '\\\\n\\t'
+              ///\\\\n\\t///
+              
+            """
+          )
+        );
+
     }
 }

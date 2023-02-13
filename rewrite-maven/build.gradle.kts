@@ -4,8 +4,6 @@ plugins {
     id("org.openrewrite.build.language-library")
 }
 
-val rocksDbVersion = "7.4.3" // https://github.com/facebook/rocksdb/issues/10448
-
 dependencies {
     api(project(":rewrite-xml"))
     api("org.jetbrains:annotations:latest.release")
@@ -13,13 +11,11 @@ dependencies {
     api("com.fasterxml.jackson.core:jackson-annotations")
 
     compileOnly(project(":rewrite-test"))
-    compileOnly(kotlin("bom"))
-    compileOnly(kotlin("stdlib"))
 
     // Caffeine 2.x works with Java 8, Caffeine 3.x is Java 11 only.
     implementation("com.github.ben-manes.caffeine:caffeine:2.+")
 
-    implementation("org.antlr:antlr4:4.9.+")
+    implementation("org.antlr:antlr4:4.11.1")
     // FIXME: switch to `latest.release`
     // when https://github.com/resilience4j/resilience4j/issues/1472 is resolved
     implementation("io.github.resilience4j:resilience4j-retry:1.7.0")
@@ -33,7 +29,7 @@ dependencies {
 
     compileOnly("guru.nidi:graphviz-java:latest.release")
 
-    compileOnly("org.rocksdb:rocksdbjni:$rocksDbVersion")
+    compileOnly("org.rocksdb:rocksdbjni:latest.release")
     compileOnly(project(":rewrite-yaml"))
     compileOnly(project(":rewrite-properties"))
 
@@ -49,7 +45,7 @@ dependencies {
 
     testRuntimeOnly("org.mapdb:mapdb:latest.release")
     testRuntimeOnly(project(":rewrite-java-17"))
-    testRuntimeOnly("org.rocksdb:rocksdbjni:$rocksDbVersion")
+    testRuntimeOnly("org.rocksdb:rocksdbjni:latest.release")
 }
 
 tasks.register<JavaExec>("generateAntlrSources") {

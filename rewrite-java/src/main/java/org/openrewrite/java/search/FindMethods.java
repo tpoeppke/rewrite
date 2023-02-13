@@ -26,15 +26,15 @@ import org.openrewrite.java.MethodMatcher;
 import org.openrewrite.java.dataflow.FindLocalFlowPaths;
 import org.openrewrite.java.dataflow.LocalFlowSpec;
 import org.openrewrite.java.dataflow.LocalTaintFlowSpec;
+import org.openrewrite.java.table.MethodCalls;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.J;
+import org.openrewrite.java.tree.JavaSourceFile;
 import org.openrewrite.marker.SearchResult;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.openrewrite.TreeVisitor.collect;
 
 /**
  * Finds matching method invocations.
@@ -42,6 +42,7 @@ import static org.openrewrite.TreeVisitor.collect;
 @EqualsAndHashCode(callSuper = true)
 @Value
 public class FindMethods extends Recipe {
+    transient MethodCalls methodCalls = new MethodCalls(this);
 
     /**
      * A method pattern that is used to find matching method invocations.
@@ -92,6 +93,13 @@ public class FindMethods extends Recipe {
                 J.MethodInvocation m = super.visitMethodInvocation(method, ctx);
                 if (methodMatcher.matches(method)) {
                     if (!flowEnabled) {
+                        JavaSourceFile javaSourceFile = getCursor().firstEnclosing(JavaSourceFile.class);
+                        if(javaSourceFile != null) {
+                            methodCalls.insertRow(ctx, new MethodCalls.Row(
+                                    javaSourceFile.getSourcePath().toString(),
+                                    method.printTrimmed(getCursor())
+                            ));
+                        }
                         m = SearchResult.found(m);
                     } else {
                         doAfterVisit(new FindLocalFlowPaths<>(getFlowSpec(method)));
@@ -105,7 +113,14 @@ public class FindMethods extends Recipe {
                 J.MemberReference m = super.visitMemberReference(memberRef, ctx);
                 if (methodMatcher.matches(m.getMethodType())) {
                     if (!flowEnabled) {
-                        m = m.withReference(m.getReference().withMarkers(m.getReference().getMarkers().searchResult()));
+                        JavaSourceFile javaSourceFile = getCursor().firstEnclosing(JavaSourceFile.class);
+                        if(javaSourceFile != null) {
+                            methodCalls.insertRow(ctx, new MethodCalls.Row(
+                                    javaSourceFile.getSourcePath().toString(),
+                                    memberRef.printTrimmed(getCursor())
+                            ));
+                        }
+                        m = m.withReference(SearchResult.found(m.getReference()));
                     } else {
                         doAfterVisit(new FindLocalFlowPaths<>(getFlowSpec(memberRef)));
                     }
@@ -118,6 +133,13 @@ public class FindMethods extends Recipe {
                 J.NewClass n = super.visitNewClass(newClass, ctx);
                 if (methodMatcher.matches(newClass)) {
                     if (!flowEnabled) {
+                        JavaSourceFile javaSourceFile = getCursor().firstEnclosing(JavaSourceFile.class);
+                        if(javaSourceFile != null) {
+                            methodCalls.insertRow(ctx, new MethodCalls.Row(
+                                    javaSourceFile.getSourcePath().toString(),
+                                    newClass.printTrimmed(getCursor())
+                            ));
+                        }
                         n = SearchResult.found(n);
                     } else {
                         doAfterVisit(new FindLocalFlowPaths<>(getFlowSpec(newClass)));
@@ -130,7 +152,6 @@ public class FindMethods extends Recipe {
                 switch (flow) {
                     case "data":
                         return new LocalFlowSpec<Expression, Expression>() {
-
                             @Override
                             public boolean isSource(Expression expression, Cursor cursor) {
                                 return expression == source;
@@ -160,20 +181,56 @@ public class FindMethods extends Recipe {
         };
     }
 
-    /**
-     * @param j             The subtree to search.
-     * @param methodPattern A method pattern. See {@link MethodMatcher} for details about this syntax.
-     * @return A set of {@link J.MethodInvocation} and {@link J.MemberReference} representing calls to this method.
-     */
     public static Set<J> find(J j, String methodPattern) {
+        return find(j, methodPattern, false);
+    }
+
+    /**
+     * @param j              The subtree to search.
+     * @param methodPattern  A method pattern. See {@link MethodMatcher} for details about this syntax.
+     * @param matchOverrides Whether to match overrides.
+     * @return A set of {@link J.MethodInvocation}, {@link J.MemberReference}, and {@link J.NewClass} representing calls to this method.
+     */
+    public static Set<J> find(J j, String methodPattern, boolean matchOverrides) {
+        FindMethods findMethods = new FindMethods(methodPattern, null, null);
+        findMethods.methodCalls.setEnabled(false);
         return TreeVisitor.collect(
-                        new FindMethods(methodPattern, null, null).getVisitor(),
+                        findMethods.getVisitor(),
                         j,
                         new HashSet<>()
                 )
                 .stream()
-                .filter(t -> t instanceof J.MethodInvocation || t instanceof J.MethodDeclaration)
+                .filter(t -> t instanceof J.MethodInvocation || t instanceof J.MemberReference || t instanceof J.NewClass)
                 .map(t -> (J) t)
+                .collect(Collectors.toSet());
+    }
+
+    public static Set<J.MethodDeclaration> findDeclaration(J j, String methodPattern) {
+        return findDeclaration(j, methodPattern, false);
+    }
+
+    public static Set<J.MethodDeclaration> findDeclaration(J j, String methodPattern, boolean matchOverrides) {
+        return TreeVisitor.collect(
+                        new JavaIsoVisitor<ExecutionContext>() {
+                            final MethodMatcher methodMatcher = new MethodMatcher(methodPattern, matchOverrides);
+
+                            @Override
+                            public J.MethodDeclaration visitMethodDeclaration(J.MethodDeclaration method, ExecutionContext p) {
+                                J.ClassDeclaration enclosingClass = getCursor().firstEnclosing(J.ClassDeclaration.class);
+                                if (enclosingClass != null && methodMatcher.matches(method, getCursor().firstEnclosingOrThrow(J.ClassDeclaration.class))) {
+                                    return SearchResult.found(method);
+                                } else if (methodMatcher.matches(method.getMethodType())) {
+                                    return SearchResult.found(method);
+                                }
+                                return super.visitMethodDeclaration(method, p);
+                            }
+                        },
+                        j,
+                        new HashSet<>()
+                )
+                .stream()
+                .filter(J.MethodDeclaration.class::isInstance)
+                .map(J.MethodDeclaration.class::cast)
                 .collect(Collectors.toSet());
     }
 }

@@ -19,12 +19,16 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.intellij.lang.annotations.Language;
+import org.openrewrite.config.DataTableDescriptor;
 import org.openrewrite.config.RecipeDescriptor;
 import org.openrewrite.internal.ListUtils;
 import org.openrewrite.internal.RecipeIntrospectionUtils;
 import org.openrewrite.internal.lang.NullUtils;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.scheduling.ForkJoinScheduler;
+import org.openrewrite.table.RecipeRunStats;
+import org.openrewrite.table.SourcesFileErrors;
+import org.openrewrite.table.SourcesFileResults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static java.util.Collections.emptyList;
+import static org.openrewrite.internal.RecipeIntrospectionUtils.dataTableDescriptorFromDataTable;
 
 /**
  * Provides a formalized link list data structure of {@link Recipe recipes} and a {@link Recipe#run(List)} method which will
@@ -69,6 +74,9 @@ public abstract class Recipe implements Cloneable {
 
     private transient List<TreeVisitor<?, ExecutionContext>> singleSourceApplicableTests;
     private transient List<TreeVisitor<?, ExecutionContext>> applicableTests;
+
+    @Nullable
+    private transient List<DataTableDescriptor> dataTables;
 
     public static Recipe noop() {
         return new Noop();
@@ -135,11 +143,21 @@ public abstract class Recipe implements Cloneable {
      */
     @Nullable
     public Duration getEstimatedEffortPerOccurrence() {
-        return null;
+        return Duration.ofMinutes(5);
     }
 
     public final RecipeDescriptor getDescriptor() {
         return RecipeIntrospectionUtils.recipeDescriptorFromRecipe(this);
+    }
+
+    private static final List<DataTableDescriptor> GLOBAL_DATA_TABLES = Arrays.asList(
+            dataTableDescriptorFromDataTable(new SourcesFileResults(Recipe.noop())),
+            dataTableDescriptorFromDataTable(new SourcesFileErrors(Recipe.noop())),
+            dataTableDescriptorFromDataTable(new RecipeRunStats(Recipe.noop()))
+    );
+
+    public List<DataTableDescriptor> getDataTableDescriptors() {
+        return ListUtils.concatAll(dataTables == null ? emptyList() : dataTables, GLOBAL_DATA_TABLES);
     }
 
     /**
@@ -171,6 +189,9 @@ public abstract class Recipe implements Cloneable {
      * @return This recipe.
      */
     public Recipe doNext(Recipe recipe) {
+        if (recipe == this) {
+            throw new IllegalArgumentException("Cannot add a recipe to itself.");
+        }
         recipeList.add(recipe);
         return this;
     }
@@ -206,7 +227,8 @@ public abstract class Recipe implements Cloneable {
 
     /**
      * A recipe can be configured with any number of applicable tests that can be used to determine whether it should run on a
-     * particular source file.
+     * particular source file. If multiple applicable tests configured, the final result of the applicable test depends
+     * on all conditions being met, that is, a logical 'AND' relationship.
      * <p>
      * To identify a {@link SourceFile} as applicable, the visitor should mark or change it at any level. Any mutation
      * that the applicability test visitor makes on the tree will not included in the results.
@@ -216,11 +238,18 @@ public abstract class Recipe implements Cloneable {
      */
     @SuppressWarnings("unused")
     public Recipe addApplicableTest(TreeVisitor<?, ExecutionContext> test) {
-        if(applicableTests == null) {
+        if (applicableTests == null) {
             applicableTests = new ArrayList<>(1);
         }
         applicableTests.add(test);
         return this;
+    }
+
+    public void addDataTable(DataTable<?> dataTable) {
+        if (dataTables == null) {
+            dataTables = new ArrayList<>();
+        }
+        dataTables.add(dataTableDescriptorFromDataTable(dataTable));
     }
 
     public List<TreeVisitor<?, ExecutionContext>> getApplicableTests() {
@@ -244,7 +273,8 @@ public abstract class Recipe implements Cloneable {
 
     /**
      * A recipe can be configured with any number of applicable tests that can be used to determine whether it should run on a
-     * particular source file.
+     * particular source file. If multiple applicable tests configured, the final result of the applicable test depends
+     * on all conditions being met, that is, a logical 'AND' relationship.
      * <p>
      * To identify a {@link SourceFile} as applicable, the visitor should mark or change it at any level. Any mutation
      * that the applicability test visitor makes on the tree will not included in the results.
@@ -252,7 +282,7 @@ public abstract class Recipe implements Cloneable {
      * @return A tree visitor that performs an applicability test.
      */
     public Recipe addSingleSourceApplicableTest(TreeVisitor<?, ExecutionContext> test) {
-        if(singleSourceApplicableTests == null) {
+        if (singleSourceApplicableTests == null) {
             singleSourceApplicableTests = new ArrayList<>(1);
         }
         singleSourceApplicableTests.add(test);
@@ -269,7 +299,7 @@ public abstract class Recipe implements Cloneable {
      * Note that here, as throughout OpenRewrite, we use referential equality to detect that a change has occured.
      * To indicate to rewrite that the recipe has made changes a different instance must be returned than the instance
      * passed in as "before".
-     *
+     * <p>
      * Currently, the list passed in as "before" is not immutable, but you should treat it as such anyway.
      *
      * @param before The set of source files to operate on.
@@ -303,7 +333,7 @@ public abstract class Recipe implements Cloneable {
     public Validated validate(ExecutionContext ctx) {
         Validated validated = validate();
 
-        for(Recipe recipe : recipeList) {
+        for (Recipe recipe : recipeList) {
             validated = validated.and(recipe.validate(ctx));
         }
         return validated;
@@ -326,7 +356,7 @@ public abstract class Recipe implements Cloneable {
                 logger.warn("Unable to validate the field [{}] on the class [{}]", field.getName(), this.getClass().getName());
             }
         }
-        for(Recipe recipe : recipeList) {
+        for (Recipe recipe : recipeList) {
             validated = validated.and(recipe.validate());
         }
         return validated;
@@ -367,7 +397,6 @@ public abstract class Recipe implements Cloneable {
         return Objects.hash(getName());
     }
 
-    @SuppressWarnings("CloneDoesntDeclareCloneNotSupportedException")
     @Override
     public Object clone() {
         try {

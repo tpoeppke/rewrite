@@ -1,7 +1,6 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
     id("org.openrewrite.build.language-library")
+    id("jvm-test-suite")
 }
 
 val compiler = javaToolchains.compilerFor {
@@ -19,14 +18,10 @@ dependencies {
 
     implementation("io.micrometer:micrometer-core:1.9.+")
 
-    testImplementation("org.jetbrains.kotlin:kotlin-reflect")
-    testImplementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-
     testImplementation("org.junit.jupiter:junit-jupiter-api:latest.release")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:latest.release")
 
     testImplementation(project(":rewrite-test"))
-    testImplementation(project(":rewrite-java-tck"))
 }
 
 java {
@@ -35,15 +30,7 @@ java {
     }
 }
 
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-}
-
 tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = JavaVersion.VERSION_1_8.toString()
-    targetCompatibility = JavaVersion.VERSION_1_8.toString()
     options.isFork = true
     options.release.set(null as? Int?) // remove `--release 8` set in `org.openrewrite.java-base`
 }
@@ -59,4 +46,33 @@ tasks.withType<Javadoc>().configureEach {
     executable = javaToolchains.javadocToolFor {
         languageVersion.set(JavaLanguageVersion.of(8))
     }.get().executablePath.toString()
+}
+
+testing {
+    suites {
+        val test by getting(JvmTestSuite::class)
+
+        register("compatibilityTest", JvmTestSuite::class) {
+            dependencies {
+                implementation(project())
+                implementation(project(":rewrite-java-tck"))
+            }
+
+            targets {
+                all {
+                    testTask.configure {
+                        useJUnitPlatform {
+                            excludeTags("java11", "java17")
+                        }
+                        jvmArgs = listOf("-XX:+UnlockDiagnosticVMOptions", "-XX:+ShowHiddenFrames")
+                        shouldRunAfter(test)
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(testing.suites.named("compatibilityTest"))
 }

@@ -15,6 +15,9 @@
  */
 package org.openrewrite.test;
 
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import lombok.Getter;
 import org.openrewrite.*;
 import org.openrewrite.config.Environment;
@@ -23,14 +26,16 @@ import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.quark.QuarkParser;
 
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.function.Consumer;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SuppressWarnings("UnusedReturnValue")
 @Getter
 public class RecipeSpec {
     public static RecipeSpec defaults() {
@@ -77,11 +82,9 @@ public class RecipeSpec {
     @Nullable
     PrintOutputCapture.MarkerPrinter markerPrinter;
 
-    Consumer<List<SourceFile>> beforeRecipe = s -> {
-    };
+    List<UncheckedConsumer<List<SourceFile>>> beforeRecipes = new ArrayList<>();
 
-    Consumer<RecipeRun> afterRecipe = r -> {
-    };
+    List<UncheckedConsumer<RecipeRun>> afterRecipes = new ArrayList<>();
 
     // The before and after here don't mean anything
     SourceSpec<SourceFile> allSources = new SourceSpec<>(SourceFile.class, null, QuarkParser.builder(), "", null);
@@ -143,16 +146,55 @@ public class RecipeSpec {
         return this;
     }
 
-    public RecipeSpec beforeRecipe(Consumer<List<SourceFile>> beforeRecipe) {
-        this.beforeRecipe = beforeRecipe;
+    public RecipeSpec beforeRecipe(UncheckedConsumer<List<SourceFile>> beforeRecipe) {
+        this.beforeRecipes.add(beforeRecipe);
         return this;
     }
 
-    public RecipeSpec afterRecipe(Consumer<RecipeRun> afterRecipe) {
-        this.afterRecipe = afterRecipe;
+    public RecipeSpec afterRecipe(UncheckedConsumer<RecipeRun> afterRecipe) {
+        this.afterRecipes.add(afterRecipe);
         return this;
     }
 
+    @Incubating(since = "7.35.0")
+    public <E> RecipeSpec dataTable(Class<E> rowType, UncheckedConsumer<List<E>> extract) {
+        return afterRecipe(run -> {
+            for (Map.Entry<DataTable<?>, List<?>> dataTableListEntry : run.getDataTables().entrySet()) {
+                if (dataTableListEntry.getKey().getType().equals(rowType)) {
+                    //noinspection unchecked
+                    List<E> rows = (List<E>) dataTableListEntry.getValue();
+                    assertThat(rows).isNotNull();
+                    assertThat(rows).isNotEmpty();
+                    extract.accept(rows);
+                }
+            }
+
+        });
+    }
+
+    @Incubating(since = "7.35.0")
+    public <E, V> RecipeSpec dataTableAsCsv(Class<DataTable<?>> dataTableClass, String expect) {
+        return dataTableAsCsv(dataTableClass.getName(), expect);
+    }
+
+    @Incubating(since = "7.35.0")
+    public <E, V> RecipeSpec dataTableAsCsv(String name, String expect) {
+        afterRecipe(run -> {
+            DataTable<?> dataTable = run.getDataTable(name);
+            assertThat(dataTable).isNotNull();
+            List<E> rows = run.getDataTableRows(name);
+            StringWriter writer = new StringWriter();
+            CsvMapper mapper = CsvMapper.builder()
+                    .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+                    .build();
+            CsvSchema schema = mapper.schemaFor(dataTable.getType()).withHeader();
+            mapper.writerFor(dataTable.getType()).with(schema).writeValues(writer).writeAll(rows);
+            assertThat(writer.toString()).isEqualTo(expect);
+        });
+        return this;
+    }
+
+    @Incubating(since = "7.35.0")
     public RecipeSpec validateRecipeSerialization(boolean validate) {
         this.serializationValidation = validate;
         return this;

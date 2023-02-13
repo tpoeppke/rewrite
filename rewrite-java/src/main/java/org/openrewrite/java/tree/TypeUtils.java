@@ -19,8 +19,11 @@ import org.openrewrite.internal.lang.Nullable;
 
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 public class TypeUtils {
+    private static final JavaType.Class TYPE_OBJECT = JavaType.ShallowClass.build("java.lang.Object");
+
     private TypeUtils() {
     }
 
@@ -156,16 +159,27 @@ public class TypeUtils {
             }
             if (to == from) {
                 return true;
+            } else if (to instanceof JavaType.Parameterized) {
+                JavaType.Parameterized toParameterized = (JavaType.Parameterized) to;
+                if (!(from instanceof JavaType.Parameterized)) {
+                    return toParameterized.getTypeParameters().stream().allMatch(p -> isAssignableTo(p, TYPE_OBJECT));
+                }
+                JavaType.Parameterized fromParameterized = (JavaType.Parameterized) from;
+                List<JavaType> toParameters = toParameterized.getTypeParameters();
+                List<JavaType> fromParameters = fromParameterized.getTypeParameters();
+                int parameterCount = toParameters.size();
+                return parameterCount == fromParameters.size() &&
+                        isAssignableTo(toParameterized.getType(), fromParameterized.getType()) &&
+                        IntStream.range(0, parameterCount).allMatch(i -> isAssignableTo(toParameters.get(i), fromParameters.get(i)));
             } else if (to instanceof JavaType.FullyQualified) {
                 JavaType.FullyQualified toFq = (JavaType.FullyQualified) to;
                 return isAssignableTo(toFq.getFullyQualifiedName(), from);
             } else if (to instanceof JavaType.GenericTypeVariable) {
                 JavaType.GenericTypeVariable genericTo = (JavaType.GenericTypeVariable) to;
-                for (JavaType bound : genericTo.getBounds()) {
-                    if (isAssignableTo(bound, from)) {
-                        return true;
-                    }
+                if (genericTo.getBounds().isEmpty()) {
+                    return genericTo.getName().equals("?");
                 }
+                return false;
             } else if (to instanceof JavaType.Variable) {
                 return isAssignableTo(((JavaType.Variable) to).getType(), from);
             } else if (to instanceof JavaType.Method) {
@@ -378,35 +392,38 @@ public class TypeUtils {
      * @return true when a type has no null, unknown, or invalid parts
      */
     public static boolean isWellFormedType(@Nullable JavaType type) {
+        return isWellFormedType(type, new HashSet<>());
+    }
+
+    public static boolean isWellFormedType(@Nullable JavaType type, Set<JavaType> seen) {
         if(type == null || type instanceof JavaType.Unknown) {
             return false;
         }
-        return isWellFormedType(new HashSet<>(), type);
+        return isWellFormedType0(type, seen);
     }
 
-    private static boolean isWellFormedType(Set<JavaType> seen, JavaType type) {
-        if(seen.contains(type)) {
+    private static boolean isWellFormedType0(JavaType type, Set<JavaType> seen) {
+        if(!seen.add(type)) {
             return true;
         }
-        seen.add(type);
         if(type instanceof JavaType.Parameterized) {
             JavaType.Parameterized parameterized = (JavaType.Parameterized) type;
-            return isWellFormedType(parameterized.getType()) && parameterized.getTypeParameters().stream().allMatch(it -> isWellFormedType(seen, it));
+            return isWellFormedType(parameterized.getType(), seen) && parameterized.getTypeParameters().stream().allMatch(it -> isWellFormedType(it, seen));
         } else if(type instanceof JavaType.Array) {
             JavaType.Array arr = (JavaType.Array) type;
-            return isWellFormedType(arr.getElemType());
+            return isWellFormedType(arr.getElemType(), seen);
         } else if(type instanceof JavaType.GenericTypeVariable) {
             JavaType.GenericTypeVariable gen = (JavaType.GenericTypeVariable) type;
-            return gen.getBounds().stream().allMatch(it -> isWellFormedType(seen, it));
+            return gen.getBounds().stream().allMatch(it -> isWellFormedType(it, seen));
         } else if(type instanceof JavaType.Variable) {
             JavaType.Variable var = (JavaType.Variable) type;
-            return isWellFormedType(var.getType()) && isWellFormedType(var.getOwner());
+            return isWellFormedType(var.getType(), seen) && isWellFormedType(var.getOwner(), seen);
         } else if(type instanceof JavaType.MultiCatch) {
             JavaType.MultiCatch mc = (JavaType.MultiCatch) type;
-            return mc.getThrowableTypes().stream().allMatch(it -> isWellFormedType(seen, it));
+            return mc.getThrowableTypes().stream().allMatch(it -> isWellFormedType(it, seen));
         } else if(type instanceof JavaType.Method) {
             JavaType.Method m = (JavaType.Method) type;
-            return isWellFormedType(m.getReturnType()) && isWellFormedType(m.getDeclaringType()) && m.getParameterTypes().stream().allMatch(it -> isWellFormedType(seen, it));
+            return isWellFormedType(m.getReturnType(), seen) && isWellFormedType(m.getDeclaringType(), seen) && m.getParameterTypes().stream().allMatch(it -> isWellFormedType(it, seen));
         }
 
         return true;

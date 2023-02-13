@@ -159,6 +159,47 @@ class AddDependencyTest implements RewriteTest {
     }
 
     @Test
+    void addDependencyWithClassifier() {
+        AddDependency addDep = new AddDependency(
+          "io.netty", "netty-tcnative-boringssl-static", "2.0.54.Final", null, "compile", true,
+          "com.google.common.math.IntMath", null, "linux-x86_64", false, null
+        );
+        rewriteRun(
+          spec -> spec.recipe(addDep),
+          mavenProject(
+            "project",
+            srcMainJava(
+              java(usingGuavaIntMath)
+            ),
+            pomXml(
+              """
+                    <project>
+                        <groupId>com.mycompany.app</groupId>
+                        <artifactId>my-app</artifactId>
+                        <version>1</version>
+                    </project>
+                """,
+              """
+                    <project>
+                        <groupId>com.mycompany.app</groupId>
+                        <artifactId>my-app</artifactId>
+                        <version>1</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>io.netty</groupId>
+                                <artifactId>netty-tcnative-boringssl-static</artifactId>
+                                <version>2.0.54.Final</version>
+                                <classifier>linux-x86_64</classifier>
+                            </dependency>
+                        </dependencies>
+                    </project>
+                """
+            )
+          )
+        );
+    }
+
+    @Test
     void notUsingType() {
         rewriteRun(
           spec -> spec.recipe(addDependency(
@@ -453,20 +494,20 @@ class AddDependencyTest implements RewriteTest {
           spec -> spec.recipe(addDependency("com.google.guava:guava:29.0-jre", "com.google.common.math.IntMath")),
           pomXml(
             """
-                  <project>
-                      <groupId>com.mycompany.app</groupId>
-                      <artifactId>my-parent</artifactId>
-                      <version>1</version>
-                      <dependencyManagement>
-                          <dependencies>
-                              <dependency>
-                                  <groupId>com.google.guava</groupId>
-                                  <artifactId>guava</artifactId>
-                                  <version>28.0-jre</version>
-                              </dependency>
-                          </dependencies>
-                      </dependencyManagement>
-                  </project>
+              <project>
+                  <groupId>com.mycompany.app</groupId>
+                  <artifactId>my-parent</artifactId>
+                  <version>1</version>
+                  <dependencyManagement>
+                      <dependencies>
+                          <dependency>
+                              <groupId>com.google.guava</groupId>
+                              <artifactId>guava</artifactId>
+                              <version>28.0-jre</version>
+                          </dependency>
+                      </dependencies>
+                  </dependencyManagement>
+              </project>
               """
           ),
           mavenProject(
@@ -676,6 +717,82 @@ class AddDependencyTest implements RewriteTest {
                         </dependencies>
                     </project>
                 """.formatted(scope)
+            )
+          )
+        );
+    }
+
+    @Test
+    void addDependencyToProjectsThatNeedIt() {
+        rewriteRun(
+          spec -> spec.recipe(addDependency("com.google.guava:guava:29.0-jre", "com.google.common.math.IntMath", "compile")),
+          mavenProject("root",
+            pomXml(
+              """
+                <project>
+                    <groupId>com.mycompany.app</groupId>
+                    <artifactId>root</artifactId>
+                    <version>1</version>
+                    <modules>
+                        <module>project1</module>
+                        <module>project2</module>
+                    </modules>
+                </project>
+                """
+            )
+          ),
+          mavenProject("project1",
+            srcMainJava(
+              java(usingGuavaIntMath)
+            ),
+            pomXml(
+              """
+                <project>
+                    <groupId>com.mycompany.app</groupId>
+                    <artifactId>project1</artifactId>
+                    <version>1</version>
+                    <parent>
+                        <groupId>com.mycompany.app</groupId>
+                        <artifactId>root</artifactId>
+                        <version>1</version>
+                    </parent>
+                </project>
+                """,
+              """
+                <project>
+                    <groupId>com.mycompany.app</groupId>
+                    <artifactId>project1</artifactId>
+                    <version>1</version>
+                    <parent>
+                        <groupId>com.mycompany.app</groupId>
+                        <artifactId>root</artifactId>
+                        <version>1</version>
+                    </parent>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.google.guava</groupId>
+                            <artifactId>guava</artifactId>
+                            <version>29.0-jre</version>
+                        </dependency>
+                    </dependencies>
+                </project>
+                """
+            )
+          ),
+          mavenProject("project2",
+            pomXml(
+              """
+                <project>
+                    <groupId>com.mycompany.app</groupId>
+                    <artifactId>project2</artifactId>
+                    <version>1</version>
+                    <parent>
+                        <groupId>com.mycompany.app</groupId>
+                        <artifactId>root</artifactId>
+                        <version>1</version>
+                    </parent>
+                </project>
+                """
             )
           )
         );

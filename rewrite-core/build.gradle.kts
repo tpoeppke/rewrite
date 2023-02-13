@@ -29,8 +29,7 @@ dependencies {
     implementation("org.yaml:snakeyaml:latest.release")
 
     testImplementation(project(":rewrite-test"))
-
-    testRuntimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin")
+    testImplementation("org.eclipse.jgit:org.eclipse.jgit:5.13.+")
 }
 
 tasks.withType<ShadowJar> {

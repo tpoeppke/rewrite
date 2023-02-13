@@ -2,7 +2,6 @@ plugins {
     id("org.openrewrite.build.language-library")
 }
 
-// run manually with -x compileKotlin when you need to regenerate
 tasks.register<JavaExec>("generateAntlrSources") {
     mainClass.set("org.antlr.v4.Tool")
 
@@ -21,10 +20,8 @@ dependencies {
     api("com.fasterxml.jackson.core:jackson-annotations")
 
     compileOnly(project(":rewrite-test"))
-    compileOnly(platform(kotlin("bom")))
-    compileOnly(kotlin("stdlib"))
 
-    implementation("org.antlr:antlr4:4.9.+")
+    implementation("org.antlr:antlr4:4.11.1")
     implementation("org.yaml:snakeyaml:latest.release")
     implementation("io.micrometer:micrometer-core:1.9.+")
 

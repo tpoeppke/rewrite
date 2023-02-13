@@ -458,6 +458,15 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
             );
         }
 
+        JContainer<TypeTree> permitting = null;
+        if (node.getPermitsClause() != null && !node.getPermitsClause().isEmpty()) {
+            permitting = JContainer.build(
+                    sourceBefore("permits"),
+                    convertAll(node.getPermitsClause(), commaDelim, noDelim),
+                    Markers.EMPTY
+            );
+        }
+
         Space bodyPrefix = sourceBefore("{");
 
         // enum values are required by the grammar to occur before any ordinary field, constructor, or method members
@@ -521,7 +530,7 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
                 members, sourceBefore("}"));
 
         return new J.ClassDeclaration(randomId(), fmt, Markers.EMPTY, modifierResults.getLeadingAnnotations(), modifierResults.getModifiers(), kind, name, typeParams,
-                primaryConstructor, extendings, implementings, body, (JavaType.FullyQualified) typeMapping.type(node));
+                primaryConstructor, extendings, implementings, permitting, body, (JavaType.FullyQualified) typeMapping.type(node));
     }
 
     @Override
@@ -761,7 +770,7 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
                 convert(node.getType()),
                 node.getPattern() instanceof JCBindingPattern b ?
                         new J.Identifier(randomId(), sourceBefore(b.getVariable().getName().toString()), Markers.EMPTY, b.getVariable().getName().toString(),
-                                type, null) : null,
+                                type, typeMapping.variableType(b.var.sym)) : null,
                 type);
     }
 
@@ -1128,7 +1137,7 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
 
     @Override
     public J visitParameterizedType(ParameterizedTypeTree node, Space fmt) {
-        return new J.ParameterizedType(randomId(), fmt, Markers.EMPTY, convert(node.getType()), convertTypeParameters(node.getTypeArguments()));
+        return new J.ParameterizedType(randomId(), fmt, Markers.EMPTY, convert(node.getType()), convertTypeParameters(node.getTypeArguments()), typeMapping.type(node));
     }
 
     @Override
@@ -1470,7 +1479,7 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
 
             Space namedVarPrefix = sourceBefore(n.getName().toString());
 
-            JavaType type = typeMapping.type(node);
+            JavaType type = typeMapping.type(n);
             J.Identifier name = new J.Identifier(randomId(), EMPTY, Markers.EMPTY, n.getName().toString(),
                     type instanceof JavaType.Variable ? ((JavaType.Variable) type).getType() : type,
                     type instanceof JavaType.Variable ? (JavaType.Variable) type : null);
@@ -1982,6 +1991,12 @@ public class ReloadableJava17ParserVisitor extends TreePathScanner<J, Space> {
                 break;
             case VOLATILE:
                 type = J.Modifier.Type.Volatile;
+                break;
+            case SEALED:
+                type = J.Modifier.Type.Sealed;
+                break;
+            case NON_SEALED:
+                type = J.Modifier.Type.NonSealed;
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected modifier " + mod);

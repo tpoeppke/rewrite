@@ -23,7 +23,7 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
-import org.jetbrains.annotations.NotNull;
+import org.openrewrite.internal.lang.NonNull;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.maven.tree.*;
 
@@ -133,7 +133,7 @@ public class RawPom {
         String classifier;
 
         @Nullable
-        Boolean optional;
+        String optional;
 
         @Nullable
         @JacksonXmlElementWrapper
@@ -233,10 +233,10 @@ public class RawPom {
         String version;
 
         @Nullable
-        Boolean extensions;
+        String extensions;
 
         @Nullable
-        Boolean inherited;
+        String inherited;
 
         @Nullable
         JsonNode configuration;
@@ -267,7 +267,7 @@ public class RawPom {
         String phase;
 
         @Nullable
-        Boolean inherited;
+        String inherited;
 
         @Nullable
         JsonNode configuration;
@@ -396,7 +396,7 @@ public class RawPom {
         return profiles;
     }
 
-    @NotNull
+    @NonNull
     private List<MavenRepository> mapRepositories(@Nullable RawRepositories rawRepositories) {
         List<MavenRepository> pomRepositories = emptyList();
         if (rawRepositories != null) {
@@ -405,8 +405,8 @@ public class RawPom {
                 pomRepositories = new ArrayList<>(unmappedRepos.size());
                 for (RawRepositories.Repository r : unmappedRepos) {
                     pomRepositories.add(new MavenRepository(r.getId(), r.getUrl(),
-                            r.getReleases() == null || r.getReleases().isEnabled(),
-                            r.getSnapshots() == null || r.getSnapshots().isEnabled(),
+                            r.getReleases() == null ? null : r.getReleases().getEnabled(),
+                            r.getSnapshots() == null ? null : r.getSnapshots().getEnabled(),
                             false, null, null, null));
                 }
 
@@ -443,7 +443,7 @@ public class RawPom {
                 for (Dependency d : unmappedDependencies) {
                     GroupArtifactVersion dGav = new GroupArtifactVersion(d.getGroupId(), d.getArtifactId(), d.getVersion());
                     dependencies.add(new org.openrewrite.maven.tree.Dependency(dGav, d.getClassifier(), d.getType(), d.getScope(), d.getExclusions(),
-                            d.getOptional() != null && d.getOptional()));
+                            d.getOptional()));
                 }
             }
         }
@@ -457,7 +457,7 @@ public class RawPom {
             for (Dependency d : rawDependencies) {
                 GroupArtifactVersion dGav = new GroupArtifactVersion(d.getGroupId(), d.getArtifactId(), d.getVersion());
                 dependencies.add(new org.openrewrite.maven.tree.Dependency(dGav, d.getClassifier(), d.getType(), d.getScope(), d.getExclusions(),
-                        d.getOptional() != null && d.getOptional()));
+                        d.getOptional()));
             }
         }
         return dependencies;

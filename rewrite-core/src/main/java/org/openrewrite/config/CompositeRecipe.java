@@ -16,14 +16,20 @@
 package org.openrewrite.config;
 
 import org.openrewrite.Recipe;
+import org.openrewrite.internal.lang.Nullable;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A recipe that exists only to wrap other recipes.
  * Anonymous recipe classes aren't serializable/deserializable so use this, or another named type, instead
  */
 public class CompositeRecipe extends Recipe {
+
+    private static final Duration DEFAULT_ESTIMATED_EFFORT = Duration.ofMinutes(5);
+    private Duration estimatedEffortPerOccurrence;
 
     @Override
     public String getDisplayName() {
@@ -32,17 +38,44 @@ public class CompositeRecipe extends Recipe {
 
     @Override
     public Duration getEstimatedEffortPerOccurrence() {
-        Duration total = Duration.ofMinutes(0);
+        if (estimatedEffortPerOccurrence == null) {
+            long total = 0;
+            for (Recipe recipe : getRecipeList()) {
+                if (isNonzero(recipe.getEstimatedEffortPerOccurrence())) {
+                    // Duration arithmetic has poor performance, and this code gets hit a lot with deeply-nested recipes
+                    total += recipe.getEstimatedEffortPerOccurrence().toMillis();
+                }
+            }
+
+            if (total == 0) {
+                return DEFAULT_ESTIMATED_EFFORT;
+            }
+
+            estimatedEffortPerOccurrence = Duration.ofMillis(total);
+        }
+        return estimatedEffortPerOccurrence;
+    }
+
+    private static boolean isNonzero(@Nullable Duration estimatedEffortPerOccurrence) {
+        return estimatedEffortPerOccurrence != null && !estimatedEffortPerOccurrence.equals(Duration.ZERO);
+    }
+
+    @Override
+    public List<DataTableDescriptor> getDataTableDescriptors() {
+        List<DataTableDescriptor> dataTableDescriptors = null;
         for (Recipe recipe : getRecipeList()) {
-            if (recipe.getEstimatedEffortPerOccurrence() != null) {
-                total = total.plus(recipe.getEstimatedEffortPerOccurrence());
+            List<DataTableDescriptor> dtds = recipe.getDataTableDescriptors();
+            if (!dtds.isEmpty()) {
+                if (dataTableDescriptors == null) {
+                    dataTableDescriptors = new ArrayList<>();
+                }
+                for (DataTableDescriptor dtd : dtds) {
+                    if (!dataTableDescriptors.contains(dtd)) {
+                        dataTableDescriptors.add(dtd);
+                    }
+                }
             }
         }
-
-        if (total.getSeconds() == 0) {
-            return Duration.ofMinutes(5);
-        }
-
-        return total;
+        return dataTableDescriptors == null ? super.getDataTableDescriptors() : dataTableDescriptors;
     }
 }

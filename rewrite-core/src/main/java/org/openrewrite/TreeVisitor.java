@@ -54,9 +54,7 @@ import java.util.function.Function;
  * @param <P> An input object that is passed to every visit method.
  */
 public abstract class TreeVisitor<T extends Tree, P> {
-    private static final Cursor ROOT = new Cursor(null, Cursor.ROOT_VALUE);
-
-    private Cursor cursor = ROOT;
+    private Cursor cursor = new Cursor(null, Cursor.ROOT_VALUE);
 
     public static <T extends Tree, P> TreeVisitor<T, P> noop() {
         return new TreeVisitor<T, P>() {
@@ -145,7 +143,6 @@ public abstract class TreeVisitor<T extends Tree, P> {
      *
      * @param recipe The recipe whose visitor to run.
      */
-    @Incubating(since = "7.0.0")
     protected void doAfterVisit(Recipe recipe) {
         //noinspection unchecked
         afterVisit.add((TreeVisitor<T, P>) recipe.getVisitor());
@@ -324,7 +321,7 @@ public abstract class TreeVisitor<T extends Tree, P> {
                 throw e;
             }
 
-            throw new RecipeRunException(e, getCursor());
+            throw new RecipeRunException(e, getCursor(), describeLocation(getCursor()));
         }
 
         //noinspection unchecked
@@ -359,7 +356,6 @@ public abstract class TreeVisitor<T extends Tree, P> {
         return (T2) visit(tree, p);
     }
 
-    @Incubating(since = "7.2.0")
     public Markers visitMarkers(Markers markers, P p) {
         return markers.withMarkers(ListUtils.map(markers.getMarkers(), marker -> this.visitMarker(marker, p)));
     }
@@ -371,6 +367,9 @@ public abstract class TreeVisitor<T extends Tree, P> {
     }
 
     public boolean isAdaptableTo(@SuppressWarnings("rawtypes") Class<? extends TreeVisitor> adaptTo) {
+        if (adaptTo.isAssignableFrom(getClass())) {
+            return true;
+        }
         Class<? extends Tree> mine = visitorTreeType(getClass());
         Class<? extends Tree> theirs = visitorTreeType(adaptTo);
         return mine.isAssignableFrom(theirs);
@@ -413,5 +412,14 @@ public abstract class TreeVisitor<T extends Tree, P> {
             throw new IllegalArgumentException(getClass().getSimpleName() + " must be adaptable to " + adaptTo.getName() + ".");
         }
         return TreeVisitorAdapter.adapt(this, adaptTo);
+    }
+
+    @Nullable
+    protected String describeLocation(Cursor cursor) {
+        SourceFile sourceFile = cursor.firstEnclosing(SourceFile.class);
+        if (sourceFile == null) {
+            return null;
+        }
+        return sourceFile.getSourcePath().toString();
     }
 }

@@ -2,7 +2,6 @@ plugins {
     id("org.openrewrite.build.language-library")
 }
 
-// run manually with -x compileKotlin when you need to regenerate
 tasks.register<JavaExec>("generateAntlrSources") {
     mainClass.set("org.antlr.v4.Tool")
 
@@ -21,7 +20,7 @@ dependencies {
     api("io.micrometer:micrometer-core:1.9.+")
     api("org.jetbrains:annotations:latest.release")
 
-    implementation("org.antlr:antlr4:4.9.+")
+    implementation("org.antlr:antlr4:4.11.1")
     compileOnly("com.puppycrawl.tools:checkstyle:9.+") { // Pinned to 9.+ because 10.x does not support Java 8: https://checkstyle.sourceforge.io/#JRE_and_JDK
         isTransitive = false
     }
@@ -46,6 +45,7 @@ dependencies {
         isTransitive = false
     }
     testImplementation(project(":rewrite-test"))
+    testImplementation(project(":rewrite-java-test"))
 
     // For use in ClassGraphTypeMappingTest
     testRuntimeOnly("org.eclipse.persistence:org.eclipse.persistence.core:3.0.2")

@@ -22,6 +22,7 @@ import org.openrewrite.InMemoryExecutionContext;
 import org.openrewrite.Recipe;
 import org.openrewrite.marker.Markup;
 import org.openrewrite.maven.cache.InMemoryMavenPomCache;
+import org.openrewrite.maven.table.MavenMetadataFailures;
 import org.openrewrite.maven.tree.MavenRepository;
 import org.openrewrite.test.RewriteTest;
 import org.openrewrite.xml.tree.Xml;
@@ -44,10 +45,12 @@ public class MavenDependencyFailuresTest implements RewriteTest {
           spec -> spec
             .recipe(new UpgradeDependencyVersion("*", "*", "latest.patch", null, null, null))
             .executionContext(MavenExecutionContextView.view(new InMemoryExecutionContext())
-              .setRepositories(List.of(new MavenRepository("jenkins", "https://repo.jenkins-ci.org/public", true, false, true, null, null, null))))
+              .setRepositories(List.of(MavenRepository.builder().id("jenkins").uri("https://repo.jenkins-ci.org/public").build())))
             .recipeExecutionContext(new InMemoryExecutionContext())
             .cycles(1)
-            .expectedCyclesThatMakeChanges(1),
+            .expectedCyclesThatMakeChanges(1)
+            .dataTable(MavenMetadataFailures.Row.class, failures ->
+                assertThat(failures.stream().map(MavenMetadataFailures.Row::getMavenRepositoryUri).distinct()).containsExactlyInAnyOrder("https://repo.maven.apache.org/maven2")),
           pomXml(
             """
               <project>
@@ -72,7 +75,7 @@ public class MavenDependencyFailuresTest implements RewriteTest {
                 //There should be two errors (one for each failed metadata download)
                 assertThat(after.split("Unable to download metadata")).hasSize(3);
                 return after;
-                })
+            })
           )
         );
     }
@@ -83,7 +86,7 @@ public class MavenDependencyFailuresTest implements RewriteTest {
           spec -> spec
             .recipe(new UpgradeParentVersion("*", "*", "latest.patch", null, null))
             .executionContext(MavenExecutionContextView.view(new InMemoryExecutionContext())
-              .setRepositories(List.of(new MavenRepository("jenkins", "https://repo.jenkins-ci.org/public", true, false, true, null, null, null))))
+              .setRepositories(List.of(MavenRepository.builder().id("jenkins").uri("https://repo.jenkins-ci.org/public").knownToExist(true).build())))
             .recipeExecutionContext(new InMemoryExecutionContext())
             .cycles(1)
             .expectedCyclesThatMakeChanges(1),
@@ -101,17 +104,17 @@ public class MavenDependencyFailuresTest implements RewriteTest {
               </project>
               """,
             """
-                <project>
-                  <!--~~(org.jenkins-ci.plugins:credentials failed. Unable to download metadata. Tried repositories:
-                https://repo.maven.apache.org/maven2: HTTP 404)~~>--><parent>
-                      <groupId>org.jenkins-ci.plugins</groupId>
-                      <artifactId>credentials</artifactId>
-                      <version>2.3.0</version>
-                  </parent>
-                  <groupId>com.mycompany.app</groupId>
-                  <artifactId>my-app</artifactId>
-                  <version>1</version>
-                </project>
+              <project>
+                <!--~~(org.jenkins-ci.plugins:credentials failed. Unable to download metadata. Tried repositories:
+              https://repo.maven.apache.org/maven2: HTTP 404)~~>--><parent>
+                    <groupId>org.jenkins-ci.plugins</groupId>
+                    <artifactId>credentials</artifactId>
+                    <version>2.3.0</version>
+                </parent>
+                <groupId>com.mycompany.app</groupId>
+                <artifactId>my-app</artifactId>
+                <version>1</version>
+              </project>
               """
           )
         );
@@ -127,7 +130,7 @@ public class MavenDependencyFailuresTest implements RewriteTest {
         // is overwritten on disk with dependencies that don't exist.
         Path localPom = localRepository.resolve("com/bad/bad-artifact/1/bad-artifact-1.pom");
         assertThat(localPom.getParent().toFile().mkdirs()).isTrue();
-        Files.write(localPom,
+        Files.writeString(localPom,
           //language=xml
           """
              <project>
@@ -135,10 +138,11 @@ public class MavenDependencyFailuresTest implements RewriteTest {
                <artifactId>bad-artifact</artifactId>
                <version>1</version>
              </project>
-            """.getBytes()
+            """
         );
 
-        MavenRepository mavenLocal = new MavenRepository("local", localRepository.toUri().toString(), true, false, true, null, null, null);
+        MavenRepository mavenLocal = MavenRepository.builder().id("local").uri(localRepository.toUri().toString())
+          .snapshots(false).knownToExist(true).build();
 
         rewriteRun(
           spec -> spec
@@ -185,7 +189,7 @@ public class MavenDependencyFailuresTest implements RewriteTest {
               """,
             spec -> spec.beforeRecipe(maven -> {
                 // make the local pom bad before running the recipe
-                Files.write(localPom,
+                Files.writeString(localPom,
                   //language=xml
                   """
                      <project>
@@ -205,7 +209,7 @@ public class MavenDependencyFailuresTest implements RewriteTest {
                          </dependency>
                        </dependencies>
                      </project>
-                    """.getBytes()
+                    """
                 );
             })
           )

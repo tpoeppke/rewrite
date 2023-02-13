@@ -22,12 +22,13 @@ import io.vavr.CheckedFunction1;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.ipc.http.HttpSender;
 import org.openrewrite.ipc.http.HttpUrlConnectionSender;
+import org.openrewrite.maven.MavenDownloadingException;
 import org.openrewrite.maven.MavenSettings;
 import org.openrewrite.maven.cache.MavenArtifactCache;
-import org.openrewrite.maven.MavenDownloadingException;
 import org.openrewrite.maven.tree.MavenRepository;
 import org.openrewrite.maven.tree.ResolvedDependency;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.nio.file.Files;
@@ -41,6 +42,7 @@ import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toMap;
+import static org.openrewrite.internal.StreamUtils.readAllBytes;
 
 public class MavenArtifactDownloader {
     private static final RetryConfig retryConfig = RetryConfig.custom()
@@ -87,10 +89,10 @@ public class MavenArtifactDownloader {
         if (dependency.getRequested().getType() != null && !"jar".equals(dependency.getRequested().getType())) {
             return null;
         }
-
         return mavenArtifactCache.computeArtifact(dependency, () -> {
             try {
-                String uri = requireNonNull(dependency.getRepository()).getUri() + "/" +
+                String uri = requireNonNull(dependency.getRepository(),
+                        String.format("Respository for dependency '%s' was null.", dependency)).getUri() + "/" +
                         dependency.getGroupId().replace('.', '/') + '/' +
                         dependency.getArtifactId() + '/' +
                         dependency.getVersion() + '/' +
@@ -104,18 +106,23 @@ public class MavenArtifactDownloader {
                     bodyStream = Files.newInputStream(Paths.get(System.getProperty("user.home") + uri.substring(1)));
                 } else {
                     HttpSender.Request.Builder request = applyAuthentication(dependency.getRepository(), httpSender.get(uri));
-                    try(HttpSender.Response response = sendRequest.apply(request.build())) {
-                        bodyStream = response.getBody();
-                        if (!response.isSuccessful() || bodyStream == null) {
+                    try(HttpSender.Response response = sendRequest.apply(request.build());
+                        InputStream body = response.getBody()) {
+                        if (!response.isSuccessful() || body == null) {
                             onError.accept(new MavenDownloadingException(String.format("Unable to download dependency %s:%s:%s. Response was %d",
                                     dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(), response.getCode()), null,
                                     dependency.getRequested().getGav()));
                             return null;
                         }
+                        bodyStream = new ByteArrayInputStream(readAllBytes(body));
+                    } catch (Throwable t) {
+                        throw new MavenDownloadingException("Unable to download dependency", t,
+                                dependency.getRequested().getGav());
                     }
-                }
 
+                }
                 return bodyStream;
+
             } catch (Throwable t) {
                 onError.accept(t);
             }

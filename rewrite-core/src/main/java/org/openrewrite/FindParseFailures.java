@@ -18,10 +18,12 @@ package org.openrewrite;
 import lombok.EqualsAndHashCode;
 import lombok.Value;
 import org.openrewrite.marker.Markup;
+import org.openrewrite.table.ParseFailures;
 
 @Value
 @EqualsAndHashCode(callSuper = true)
 public class FindParseFailures extends Recipe {
+    ParseFailures failures = new ParseFailures(this);
 
     @Override
     public String getDisplayName() {
@@ -38,9 +40,15 @@ public class FindParseFailures extends Recipe {
     protected TreeVisitor<?, ExecutionContext> getVisitor() {
         return new TreeVisitor<Tree, ExecutionContext>() {
             @Override
-            public Tree visitSourceFile(SourceFile sourceFile, ExecutionContext executionContext) {
+            public Tree visitSourceFile(SourceFile sourceFile, ExecutionContext ctx) {
                 return sourceFile.getMarkers().findFirst(ParseExceptionResult.class)
-                        .<Tree>map(exceptionResult -> Markup.info(sourceFile, exceptionResult.getMessage()))
+                        .<Tree>map(exceptionResult -> {
+                            failures.insertRow(ctx, new ParseFailures.Row(
+                                    sourceFile.getSourcePath().toString(),
+                                    exceptionResult.getMessage()
+                            ));
+                            return Markup.info(sourceFile, exceptionResult.getMessage());
+                        })
                         .orElse(sourceFile);
             }
         };
